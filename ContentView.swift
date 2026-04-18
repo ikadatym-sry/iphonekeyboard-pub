@@ -333,6 +333,7 @@ struct ContentView: View {
     ]
 
     private struct LayoutMetrics {
+        let isPadLayout: Bool
         let horizontalPadding: CGFloat
         let verticalPadding: CGFloat
         let stackSpacing: CGFloat
@@ -346,8 +347,10 @@ struct ContentView: View {
         let onScreenKeyFontSize: CGFloat
         let onScreenKeySpacing: CGFloat
         let onScreenKeyWidth: CGFloat
+        let onScreenKeyHeight: CGFloat
         let onScreenActionKeyWidth: CGFloat
         let onScreenSpaceKeyWidth: CGFloat
+        let cardPadding: CGFloat
     }
 
     var body: some View {
@@ -433,6 +436,7 @@ struct ContentView: View {
         if isPadLike {
             let trackpadHeight = min(max(size.height * (isLandscape ? 0.44 : 0.34), 280), 420)
             return LayoutMetrics(
+                isPadLayout: true,
                 horizontalPadding: 24,
                 verticalPadding: 20,
                 stackSpacing: 18,
@@ -443,37 +447,43 @@ struct ContentView: View {
                 functionMinWidth: 68,
                 mediaMinWidth: 84,
                 modifierMinWidth: 96,
-                onScreenKeyFontSize: 14,
-                onScreenKeySpacing: 6,
-                onScreenKeyWidth: 50,
-                onScreenActionKeyWidth: 132,
-                onScreenSpaceKeyWidth: 240
+                onScreenKeyFontSize: 17,
+                onScreenKeySpacing: 8,
+                onScreenKeyWidth: 62,
+                onScreenKeyHeight: 44,
+                onScreenActionKeyWidth: 170,
+                onScreenSpaceKeyWidth: 300,
+                cardPadding: 14
             )
         }
 
         if size.width >= 390 {
-            let trackpadHeight = min(max(size.height * (isLandscape ? 0.33 : 0.32), isLandscape ? 185 : 240), isLandscape ? 245 : 340)
+            let trackpadHeight = min(max(size.height * (isLandscape ? 0.30 : 0.29), isLandscape ? 160 : 210), isLandscape ? 218 : 300)
             return LayoutMetrics(
-                horizontalPadding: isLandscape ? 14 : 16,
-                verticalPadding: isLandscape ? 12 : 14,
-                stackSpacing: isLandscape ? 12 : 14,
+                isPadLayout: false,
+                horizontalPadding: isLandscape ? 8 : 10,
+                verticalPadding: isLandscape ? 10 : 11,
+                stackSpacing: isLandscape ? 10 : 11,
                 trackpadHeight: trackpadHeight,
                 splitTopCards: isWidePhoneLandscape,
-                controlButtonMinWidth: isLandscape ? 124 : 108,
-                navigationMinWidth: isLandscape ? 88 : 82,
-                functionMinWidth: isLandscape ? 62 : 60,
-                mediaMinWidth: isLandscape ? 76 : 72,
-                modifierMinWidth: isLandscape ? 88 : 84,
+                controlButtonMinWidth: isLandscape ? 108 : 92,
+                navigationMinWidth: isLandscape ? 82 : 68,
+                functionMinWidth: isLandscape ? 58 : 54,
+                mediaMinWidth: isLandscape ? 70 : 64,
+                modifierMinWidth: isLandscape ? 82 : 72,
                 onScreenKeyFontSize: isLandscape ? 11 : 12,
                 onScreenKeySpacing: 4,
-                onScreenKeyWidth: isLandscape ? 30 : 32,
+                onScreenKeyWidth: isLandscape ? 31 : 33,
+                onScreenKeyHeight: isLandscape ? 32 : 34,
                 onScreenActionKeyWidth: isLandscape ? 102 : 96,
-                onScreenSpaceKeyWidth: isLandscape ? 178 : 150
+                onScreenSpaceKeyWidth: isLandscape ? 178 : 152,
+                cardPadding: isLandscape ? 10 : 11
             )
         }
 
         let trackpadHeight = min(max(size.height * (isLandscape ? 0.34 : 0.30), isLandscape ? 170 : 210), isLandscape ? 220 : 300)
         return LayoutMetrics(
+            isPadLayout: false,
             horizontalPadding: isLandscape ? 10 : 12,
             verticalPadding: 12,
             stackSpacing: 12,
@@ -487,8 +497,10 @@ struct ContentView: View {
             onScreenKeyFontSize: isLandscape ? 10 : 11,
             onScreenKeySpacing: 4,
             onScreenKeyWidth: isLandscape ? 26 : 27,
+            onScreenKeyHeight: isLandscape ? 30 : 31,
             onScreenActionKeyWidth: isLandscape ? 90 : 88,
-            onScreenSpaceKeyWidth: isLandscape ? 142 : 128
+            onScreenSpaceKeyWidth: isLandscape ? 142 : 128,
+            cardPadding: 10
         )
     }
 
@@ -496,24 +508,27 @@ struct ContentView: View {
         Group {
             if layout.splitTopCards {
                 HStack(alignment: .top, spacing: layout.stackSpacing) {
-                    statusCard
+                    statusCard(layout: layout)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    wifiCard
+                    wifiCard(layout: layout)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
                 VStack(spacing: layout.stackSpacing) {
-                    statusCard
-                    wifiCard
+                    statusCard(layout: layout)
+                    wifiCard(layout: layout)
                 }
             }
         }
     }
 
-    private var statusCard: some View {
+    private func statusCard(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Bluetooth Remote เพราะกู ขก. ลุก")
-                .font(.title2).bold()
+                .font(layout.isPadLayout ? .title2 : .title3)
+                .bold()
+                .lineLimit(layout.isPadLayout ? 2 : 3)
+                .minimumScaleFactor(0.82)
             Text(bluetooth.stateSummary)
                 .font(.subheadline)
                 .foregroundColor(.secondary)
@@ -551,22 +566,22 @@ struct ContentView: View {
                 Slider(value: $pointerSensitivity, in: 0.5...3.0)
                 Text(String(format: "%.1fx", pointerSensitivity))
                     .font(.caption)
-                    .frame(width: 44, alignment: .trailing)
+                    .frame(width: layout.isPadLayout ? 44 : 38, alignment: .trailing)
             }
             HStack {
                 Text("Scroll Step")
                 Slider(value: $scrollThreshold, in: 8.0...30.0)
                 Text(String(format: "%.0f", scrollThreshold))
                     .font(.caption)
-                    .frame(width: 44, alignment: .trailing)
+                    .frame(width: layout.isPadLayout ? 44 : 38, alignment: .trailing)
             }
         }
-        .padding(12)
+        .padding(layout.cardPadding)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private var wifiCard: some View {
+    private func wifiCard(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Wifi connector")
                 .font(.headline)
@@ -620,7 +635,7 @@ struct ContentView: View {
                 .buttonStyle(.bordered)
             }
         }
-        .padding(12)
+        .padding(layout.cardPadding)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
@@ -642,10 +657,10 @@ struct ContentView: View {
                 Image(systemName: "cursorarrow.motionlines")
                     .font(.system(size: 36))
                     .foregroundColor(colorScheme == .dark ? .cyan.opacity(0.9) : .blue.opacity(0.9))
-                Text("แตะกูซะ ไอ่สัส")
+                Text("แตะกู กูบอกให้มึงแตะกู")
                     .font(.headline)
                 //Text("1 finger move, 2 finger scroll, double-tap left click, long-press right click")
-                Text("คือกูขี้เกียจลุกมากๆ กูเลยทำแอพนี้มาใช้เอง จะได้ไม่ต้องลุกไปจับเม้าส์")
+                Text("คือกูขี้เกียจลุกมากๆ กูเลยทำแอพนี้มาใช้เอง จะได้ไม่ต้องลุกไปจับเม้าส์ พอกูจะหาแอปแบบนี้ใน App Store แม่งก็เสือกมีโฆษณาเต็มแอป หรือไม่ก็กูต้องจ่ายตังซื้อแอปหลอกแดกตังโง่ๆ ควย ไอ่เหี้ย")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -770,19 +785,20 @@ struct ContentView: View {
                 }
             }
         }
-        .padding(12)
+        .padding(layout.cardPadding)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
     private func onScreenKeyboardPanel(layout: LayoutMetrics) -> some View {
         VStack(spacing: layout.onScreenKeySpacing) {
-            ForEach(onScreenLetterRows, id: \.self) { row in
+            ForEach(Array(onScreenLetterRows.enumerated()), id: \.offset) { rowIndex, row in
                 HStack(spacing: layout.onScreenKeySpacing) {
                     ForEach(row, id: \.self) { letter in
                         onScreenKeyButton(
                             title: letter,
                             width: layout.onScreenKeyWidth,
+                            height: layout.onScreenKeyHeight,
                             fontSize: layout.onScreenKeyFontSize
                         ) {
                             sendLetterTap(letter)
@@ -790,12 +806,14 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
+                .offset(x: onScreenRowOffset(rowIndex: rowIndex, layout: layout))
             }
 
             HStack(spacing: layout.onScreenKeySpacing) {
                 onScreenKeyButton(
                     title: "Space",
                     width: layout.onScreenSpaceKeyWidth,
+                    height: layout.onScreenKeyHeight,
                     fontSize: layout.onScreenKeyFontSize
                 ) {
                     bluetooth.sendKey(usageID: 0x2C, action: .tap)
@@ -804,6 +822,7 @@ struct ContentView: View {
                 onScreenKeyButton(
                     title: "Backspace",
                     width: layout.onScreenActionKeyWidth,
+                    height: layout.onScreenKeyHeight,
                     fontSize: layout.onScreenKeyFontSize
                 ) {
                     bluetooth.sendKey(usageID: 0x2A, action: .tap)
@@ -812,6 +831,7 @@ struct ContentView: View {
                 onScreenKeyButton(
                     title: "Enter",
                     width: layout.onScreenActionKeyWidth,
+                    height: layout.onScreenKeyHeight,
                     fontSize: layout.onScreenKeyFontSize
                 ) {
                     bluetooth.sendKey(usageID: 0x28, action: .tap)
@@ -821,9 +841,25 @@ struct ContentView: View {
         }
     }
 
+    private func onScreenRowOffset(rowIndex: Int, layout: LayoutMetrics) -> CGFloat {
+        guard layout.isPadLayout else {
+            return 0
+        }
+
+        switch rowIndex {
+        case 1:
+            return layout.onScreenKeyWidth * 0.45
+        case 2:
+            return layout.onScreenKeyWidth * 0.90
+        default:
+            return 0
+        }
+    }
+
     private func onScreenKeyButton(
         title: String,
         width: CGFloat,
+        height: CGFloat,
         fontSize: CGFloat,
         action: @escaping () -> Void
     ) -> some View {
@@ -834,7 +870,7 @@ struct ContentView: View {
         .font(.system(size: fontSize, weight: .semibold, design: .rounded))
         .lineLimit(1)
         .minimumScaleFactor(0.7)
-        .frame(width: width)
+        .frame(width: width, height: height)
     }
 
     private func scrollButtonRow(minWidth: CGFloat) -> some View {
