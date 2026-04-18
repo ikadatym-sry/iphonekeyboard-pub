@@ -631,19 +631,35 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
             }
 
-            Picker("Appearance", selection: $selectedAppearanceMode) {
-                ForEach(AppAppearanceMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+            if layout.isPhoneLayout {
+                Picker("Appearance", selection: $selectedAppearanceMode) {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
-            }
-            .pickerStyle(layout.isPhoneLayout ? .menu : .segmented)
+                .pickerStyle(.menu)
 
-            Picker("Control Profile", selection: $selectedPreset) {
-                ForEach(ControlPreset.allCases) { preset in
-                    Text(preset.title).tag(preset)
+                Picker("Control Profile", selection: $selectedPreset) {
+                    ForEach(ControlPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
                 }
+                .pickerStyle(.menu)
+            } else {
+                Picker("Appearance", selection: $selectedAppearanceMode) {
+                    ForEach(AppAppearanceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Control Profile", selection: $selectedPreset) {
+                    ForEach(ControlPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(layout.isPhoneLayout ? .menu : .segmented)
             HStack {
                 Text("Sensitivity")
                 Slider(value: $pointerSensitivity, in: 0.5...3.0)
@@ -831,12 +847,21 @@ struct ContentView: View {
             Text("Keyboard")
                 .font(.headline)
 
-            Picker("Keyboard Mode", selection: $keyboardInputMode) {
-                ForEach(KeyboardInputMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+            if layout.isPhoneLayout {
+                Picker("Keyboard Mode", selection: $keyboardInputMode) {
+                    ForEach(KeyboardInputMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
+                .pickerStyle(.menu)
+            } else {
+                Picker("Keyboard Mode", selection: $keyboardInputMode) {
+                    ForEach(KeyboardInputMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(layout.isPhoneLayout ? .menu : .segmented)
 
             if keyboardInputMode == .sendText {
                 VStack(spacing: 8) {
