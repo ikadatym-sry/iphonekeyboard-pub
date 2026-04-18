@@ -345,6 +345,9 @@ struct ContentView: View {
         let modifierMinWidth: CGFloat
         let onScreenKeyFontSize: CGFloat
         let onScreenKeySpacing: CGFloat
+        let onScreenKeyWidth: CGFloat
+        let onScreenActionKeyWidth: CGFloat
+        let onScreenSpaceKeyWidth: CGFloat
     }
 
     var body: some View {
@@ -422,8 +425,10 @@ struct ContentView: View {
 
     private func layoutMetrics(for size: CGSize) -> LayoutMetrics {
         let shortestSide = min(size.width, size.height)
-        let isPadLike = size.width >= 800 || shortestSide >= 700
+        let isPadDevice = UIDevice.current.userInterfaceIdiom == .pad
+        let isPadLike = isPadDevice || shortestSide >= 700
         let isLandscape = size.width > size.height
+        let isWidePhoneLandscape = !isPadLike && isLandscape && size.width >= 760
 
         if isPadLike {
             let trackpadHeight = min(max(size.height * (isLandscape ? 0.44 : 0.34), 280), 420)
@@ -439,42 +444,51 @@ struct ContentView: View {
                 mediaMinWidth: 84,
                 modifierMinWidth: 96,
                 onScreenKeyFontSize: 14,
-                onScreenKeySpacing: 6
+                onScreenKeySpacing: 6,
+                onScreenKeyWidth: 50,
+                onScreenActionKeyWidth: 132,
+                onScreenSpaceKeyWidth: 240
             )
         }
 
         if size.width >= 390 {
-            let trackpadHeight = min(max(size.height * (isLandscape ? 0.42 : 0.32), 240), 340)
+            let trackpadHeight = min(max(size.height * (isLandscape ? 0.33 : 0.32), isLandscape ? 185 : 240), isLandscape ? 245 : 340)
             return LayoutMetrics(
-                horizontalPadding: 16,
-                verticalPadding: 14,
-                stackSpacing: 14,
+                horizontalPadding: isLandscape ? 14 : 16,
+                verticalPadding: isLandscape ? 12 : 14,
+                stackSpacing: isLandscape ? 12 : 14,
                 trackpadHeight: trackpadHeight,
-                splitTopCards: false,
-                controlButtonMinWidth: 108,
-                navigationMinWidth: 82,
-                functionMinWidth: 60,
-                mediaMinWidth: 72,
-                modifierMinWidth: 84,
-                onScreenKeyFontSize: 12,
-                onScreenKeySpacing: 4
+                splitTopCards: isWidePhoneLandscape,
+                controlButtonMinWidth: isLandscape ? 124 : 108,
+                navigationMinWidth: isLandscape ? 88 : 82,
+                functionMinWidth: isLandscape ? 62 : 60,
+                mediaMinWidth: isLandscape ? 76 : 72,
+                modifierMinWidth: isLandscape ? 88 : 84,
+                onScreenKeyFontSize: isLandscape ? 11 : 12,
+                onScreenKeySpacing: 4,
+                onScreenKeyWidth: isLandscape ? 30 : 32,
+                onScreenActionKeyWidth: isLandscape ? 102 : 96,
+                onScreenSpaceKeyWidth: isLandscape ? 178 : 150
             )
         }
 
-        let trackpadHeight = min(max(size.height * (isLandscape ? 0.40 : 0.30), 210), 300)
+        let trackpadHeight = min(max(size.height * (isLandscape ? 0.34 : 0.30), isLandscape ? 170 : 210), isLandscape ? 220 : 300)
         return LayoutMetrics(
-            horizontalPadding: 12,
+            horizontalPadding: isLandscape ? 10 : 12,
             verticalPadding: 12,
             stackSpacing: 12,
             trackpadHeight: trackpadHeight,
-            splitTopCards: false,
-            controlButtonMinWidth: 96,
-            navigationMinWidth: 72,
-            functionMinWidth: 52,
-            mediaMinWidth: 62,
-            modifierMinWidth: 74,
-            onScreenKeyFontSize: 11,
-            onScreenKeySpacing: 4
+            splitTopCards: isWidePhoneLandscape,
+            controlButtonMinWidth: isLandscape ? 112 : 96,
+            navigationMinWidth: isLandscape ? 78 : 72,
+            functionMinWidth: isLandscape ? 56 : 52,
+            mediaMinWidth: isLandscape ? 66 : 62,
+            modifierMinWidth: isLandscape ? 78 : 74,
+            onScreenKeyFontSize: isLandscape ? 10 : 11,
+            onScreenKeySpacing: 4,
+            onScreenKeyWidth: isLandscape ? 26 : 27,
+            onScreenActionKeyWidth: isLandscape ? 90 : 88,
+            onScreenSpaceKeyWidth: isLandscape ? 142 : 128
         )
     }
 
@@ -507,7 +521,7 @@ struct ContentView: View {
                 .font(.footnote)
                 .foregroundColor(.secondary)
 
-            HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Button(bluetooth.isAdvertising || bluetooth.subscribedCentralCount > 0 ? "Disconnect BLE" : "Enable BLE") {
                     bluetooth.toggleBluetoothConnection()
                 }
@@ -580,7 +594,7 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
             }
 
-            HStack(spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
                 Button("Auto Discover") {
                     bluetooth.discoverWebSocketServer { discoveredURL in
                         guard let discoveredURL else {
@@ -696,19 +710,23 @@ struct ContentView: View {
             .pickerStyle(.segmented)
 
             if keyboardInputMode == .sendText {
-                HStack {
+                VStack(spacing: 8) {
                     TextField("Type text to send", text: $textToSend)
                         .textFieldStyle(.roundedBorder)
-                    Button("Send") {
-                        let trimmed = textToSend.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard !trimmed.isEmpty else {
-                            return
-                        }
 
-                        bluetooth.sendText(trimmed)
-                        textToSend = ""
+                    HStack {
+                        Spacer()
+                        Button("Send") {
+                            let trimmed = textToSend.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !trimmed.isEmpty else {
+                                return
+                            }
+
+                            bluetooth.sendText(trimmed)
+                            textToSend = ""
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
                 }
             } else {
                 onScreenKeyboardPanel(layout: layout)
@@ -758,51 +776,65 @@ struct ContentView: View {
     }
 
     private func onScreenKeyboardPanel(layout: LayoutMetrics) -> some View {
-        VStack(alignment: .leading, spacing: layout.onScreenKeySpacing) {
+        VStack(spacing: layout.onScreenKeySpacing) {
             ForEach(onScreenLetterRows, id: \.self) { row in
                 HStack(spacing: layout.onScreenKeySpacing) {
                     ForEach(row, id: \.self) { letter in
-                        Button(letter) {
+                        onScreenKeyButton(
+                            title: letter,
+                            width: layout.onScreenKeyWidth,
+                            fontSize: layout.onScreenKeyFontSize
+                        ) {
                             sendLetterTap(letter)
                         }
-                        .buttonStyle(.bordered)
-                        .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
 
             HStack(spacing: layout.onScreenKeySpacing) {
-                Button("Space") {
+                onScreenKeyButton(
+                    title: "Space",
+                    width: layout.onScreenSpaceKeyWidth,
+                    fontSize: layout.onScreenKeyFontSize
+                ) {
                     bluetooth.sendKey(usageID: 0x2C, action: .tap)
                 }
-                .buttonStyle(.bordered)
-                .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity)
 
-                Button("Backspace") {
+                onScreenKeyButton(
+                    title: "Backspace",
+                    width: layout.onScreenActionKeyWidth,
+                    fontSize: layout.onScreenKeyFontSize
+                ) {
                     bluetooth.sendKey(usageID: 0x2A, action: .tap)
                 }
-                .buttonStyle(.bordered)
-                .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity)
 
-                Button("Enter") {
+                onScreenKeyButton(
+                    title: "Enter",
+                    width: layout.onScreenActionKeyWidth,
+                    fontSize: layout.onScreenKeyFontSize
+                ) {
                     bluetooth.sendKey(usageID: 0x28, action: .tap)
                 }
-                .buttonStyle(.bordered)
-                .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity, alignment: .center)
         }
+    }
+
+    private func onScreenKeyButton(
+        title: String,
+        width: CGFloat,
+        fontSize: CGFloat,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(title) {
+            action()
+        }
+        .buttonStyle(.bordered)
+        .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .frame(width: width)
     }
 
     private func scrollButtonRow(minWidth: CGFloat) -> some View {
