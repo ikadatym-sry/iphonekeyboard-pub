@@ -34,6 +34,7 @@ final class BluetoothInputManager: NSObject, ObservableObject, CBPeripheralManag
 
     static let packetMagic: UInt8 = 0x42
     static let packetVersion: UInt8 = 0x01
+    private static let defaultAdvertisingName = "iPhoneRemotePad"
 
     let serviceUUID = CBUUID(string: "E20A3914-ECB4-40E4-BA35-5026E881D26E")
     let inputCharacteristicUUID = CBUUID(string: "01234567-89AB-CDEF-0123-456789ABCDEF")
@@ -42,6 +43,7 @@ final class BluetoothInputManager: NSObject, ObservableObject, CBPeripheralManag
     @Published private(set) var stateSummary = "Initializing Bluetooth..."
     @Published private(set) var subscribedCentralCount = 0
     @Published private(set) var isAdvertising = false
+    @Published private(set) var advertisingName = defaultAdvertisingName
     @Published private(set) var wifiStatus = "Wi-Fi disconnected"
     @Published private(set) var isWiFiConnected = false
     @Published private(set) var discoveredWebSocketURL: String = ""
@@ -113,7 +115,7 @@ final class BluetoothInputManager: NSObject, ObservableObject, CBPeripheralManag
             return
         }
 
-        stateSummary = "Advertising as iPhoneRemotePad"
+        stateSummary = "Advertising as \(advertisingName)"
         isAdvertising = true
     }
 
@@ -191,6 +193,29 @@ final class BluetoothInputManager: NSObject, ObservableObject, CBPeripheralManag
 
     func sendPing() {
         enqueue(event: .ping, payload: Data())
+    }
+
+    func setAdvertisingName(_ name: String) {
+        let sanitizedName = sanitizeAdvertisingName(name)
+        guard sanitizedName != advertisingName else {
+            return
+        }
+
+        advertisingName = sanitizedName
+
+        guard peripheralManager.state == .poweredOn else {
+            return
+        }
+
+        guard serviceAdded else {
+            return
+        }
+
+        if peripheralManager.isAdvertising {
+            peripheralManager.stopAdvertising()
+        }
+
+        startAdvertising()
     }
 
     func disconnectBluetooth() {
@@ -352,9 +377,34 @@ final class BluetoothInputManager: NSObject, ObservableObject, CBPeripheralManag
         }
 
         peripheralManager.startAdvertising([
-            CBAdvertisementDataLocalNameKey: "iPhoneRemotePad",
+            CBAdvertisementDataLocalNameKey: advertisingName,
             CBAdvertisementDataServiceUUIDsKey: [serviceUUID]
         ])
+    }
+
+    private func sanitizeAdvertisingName(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return Self.defaultAdvertisingName
+        }
+
+        // Keep this short so local name + service UUID fit in BLE advertising payload.
+        let maxUTF8Bytes = 18
+        var result = ""
+        var currentBytes = 0
+
+        for scalar in trimmed.unicodeScalars {
+            let scalarString = String(scalar)
+            let scalarBytes = scalarString.lengthOfBytes(using: .utf8)
+            if currentBytes + scalarBytes > maxUTF8Bytes {
+                break
+            }
+
+            result.unicodeScalars.append(scalar)
+            currentBytes += scalarBytes
+        }
+
+        return result.isEmpty ? Self.defaultAdvertisingName : result
     }
 
     private func enqueue(event: EventType, payload: Data) {

@@ -275,6 +275,7 @@ struct ContentView: View {
     @AppStorage("remotePad.savedWebSocketURL") private var savedWebSocketURL = "ws://192.168.1.100:8765"
     @AppStorage("remotePad.savedWebSocketToken") private var savedWebSocketToken = "remotepad-token"
     @AppStorage("remotePad.savedKeyboardInputMode") private var savedKeyboardInputModeRawValue = KeyboardInputMode.sendText.rawValue
+    @AppStorage("remotePad.savedDeviceName") private var savedDeviceName = "iPhoneRemotePad"
     @AppStorage("remotePad.requireSecureWebSocket") private var requireSecureWebSocket = false
 
     @State private var textToSend = ""
@@ -285,6 +286,7 @@ struct ContentView: View {
     @State private var scrollThreshold = ControlPreset.balanced.scrollThreshold
     @State private var webSocketURL = "ws://192.168.1.100:8765"
     @State private var webSocketToken = "remotepad-token"
+    @State private var deviceName = "iPhoneRemotePad"
     @State private var activeModifierUsageIDs: Set<UInt16> = []
     @State private var loadedPersistedSettings = false
 
@@ -335,6 +337,7 @@ struct ContentView: View {
     private struct LayoutMetrics {
         let isPadLayout: Bool
         let isPhoneLayout: Bool
+        let isLandscape: Bool
         let horizontalPadding: CGFloat
         let verticalPadding: CGFloat
         let stackSpacing: CGFloat
@@ -389,6 +392,10 @@ struct ContentView: View {
                 scrollThreshold = savedScrollThreshold
                 webSocketURL = savedWebSocketURL
                 webSocketToken = savedWebSocketToken
+                deviceName = savedDeviceName
+                bluetooth.setAdvertisingName(savedDeviceName)
+                deviceName = bluetooth.advertisingName
+                savedDeviceName = bluetooth.advertisingName
 
                 if let savedKeyboardInputMode = KeyboardInputMode(rawValue: savedKeyboardInputModeRawValue) {
                     keyboardInputMode = savedKeyboardInputMode
@@ -421,6 +428,13 @@ struct ContentView: View {
             .onChange(of: keyboardInputMode) { newValue in
                 savedKeyboardInputModeRawValue = newValue.rawValue
             }
+            .onChange(of: deviceName) { newValue in
+                bluetooth.setAdvertisingName(newValue)
+                if deviceName != bluetooth.advertisingName {
+                    deviceName = bluetooth.advertisingName
+                }
+                savedDeviceName = bluetooth.advertisingName
+            }
             .onDisappear {
                 releaseAllModifiers()
             }
@@ -436,6 +450,7 @@ struct ContentView: View {
             return LayoutMetrics(
                 isPadLayout: true,
                 isPhoneLayout: false,
+                isLandscape: isLandscape,
                 horizontalPadding: 24,
                 verticalPadding: 20,
                 stackSpacing: 18,
@@ -460,23 +475,24 @@ struct ContentView: View {
         return LayoutMetrics(
             isPadLayout: false,
             isPhoneLayout: true,
-            horizontalPadding: isLandscape ? 6 : 8,
-            verticalPadding: isLandscape ? 8 : 9,
-            stackSpacing: isLandscape ? 8 : 9,
+            isLandscape: isLandscape,
+            horizontalPadding: 6,
+            verticalPadding: 8,
+            stackSpacing: 8,
             trackpadHeight: trackpadHeight,
-            splitTopCards: isLandscape && size.width >= 760,
+            splitTopCards: false,
             controlButtonMinWidth: isLandscape ? 98 : 110,
             navigationMinWidth: isLandscape ? 70 : 62,
             functionMinWidth: isLandscape ? 52 : 50,
             mediaMinWidth: isLandscape ? 64 : 58,
             modifierMinWidth: isLandscape ? 76 : 66,
             onScreenKeyFontSize: isLandscape ? 11 : 12,
-            onScreenKeySpacing: 4,
+            onScreenKeySpacing: 3,
             onScreenKeyWidth: 34,
             onScreenKeyHeight: isLandscape ? 34 : 36,
             onScreenActionKeyWidth: isLandscape ? 104 : 100,
             onScreenSpaceKeyWidth: isLandscape ? 184 : 162,
-            cardPadding: isLandscape ? 8 : 9
+            cardPadding: 8
         )
     }
 
@@ -510,6 +526,15 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
             Text("Connected BLE clients: \(bluetooth.subscribedCentralCount)")
                 .font(.footnote)
+                .foregroundColor(.secondary)
+
+            TextField("BLE Device Name", text: $deviceName)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+
+            Text("Shown in Advertising as ...")
+                .font(.caption)
                 .foregroundColor(.secondary)
 
             VStack(alignment: .leading, spacing: 6) {
@@ -670,29 +695,40 @@ struct ContentView: View {
     }
 
     private func mouseButtonRow(layout: LayoutMetrics) -> some View {
-        let columns: [GridItem] = layout.isPhoneLayout
-            ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-            : [GridItem(.adaptive(minimum: layout.controlButtonMinWidth), spacing: 8)]
+        let columns: [GridItem]
+        if layout.isPhoneLayout {
+            let phoneColumnCount = layout.isLandscape ? 3 : 2
+            columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: phoneColumnCount)
+        } else {
+            columns = [GridItem(.adaptive(minimum: layout.controlButtonMinWidth), spacing: 8)]
+        }
+
+        let leftTitle = layout.isPhoneLayout ? "Left" : "Left Click"
+        let middleTitle = "Middle"
+        let rightTitle = layout.isPhoneLayout ? "Right" : "Right Click"
 
         return LazyVGrid(columns: columns, spacing: 8) {
-            Button("Left Click") {
+            Button(leftTitle) {
                 bluetooth.sendMouseButton(button: .left, action: .click)
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
 
-            Button("Middle") {
+            Button(middleTitle) {
                 bluetooth.sendMouseButton(button: .middle, action: .click)
             }
             .buttonStyle(.bordered)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
 
-            Button("Right Click") {
+            Button(rightTitle) {
                 bluetooth.sendMouseButton(button: .right, action: .click)
             }
             .buttonStyle(.bordered)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.78)
         }
@@ -778,6 +814,7 @@ struct ContentView: View {
 
     private func onScreenKeyboardPanel(layout: LayoutMetrics) -> some View {
         let useFlexiblePhoneKeys = layout.isPhoneLayout
+        let backspaceTitle = layout.isPhoneLayout ? "Back" : "Backspace"
 
         return VStack(spacing: layout.onScreenKeySpacing) {
             ForEach(Array(onScreenLetterRows.enumerated()), id: \.offset) { rowIndex, row in
@@ -810,7 +847,7 @@ struct ContentView: View {
                 }
 
                 onScreenKeyButton(
-                    title: "Backspace",
+                    title: backspaceTitle,
                     width: useFlexiblePhoneKeys ? nil : layout.onScreenActionKeyWidth,
                     height: layout.onScreenKeyHeight,
                     fontSize: layout.onScreenKeyFontSize,
@@ -872,32 +909,41 @@ struct ContentView: View {
             ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
             : [GridItem(.adaptive(minimum: layout.controlButtonMinWidth), spacing: 8)]
 
+        let upTitle = layout.isPhoneLayout ? "Up" : "Scroll Up"
+        let downTitle = layout.isPhoneLayout ? "Down" : "Scroll Down"
+        let leftTitle = layout.isPhoneLayout ? "Left" : "Scroll Left"
+        let rightTitle = layout.isPhoneLayout ? "Right" : "Scroll Right"
+
         return LazyVGrid(columns: columns, spacing: 8) {
-            Button("Scroll Up") {
+            Button(upTitle) {
                 bluetooth.sendScroll(dx: 0, dy: 1)
             }
             .buttonStyle(.bordered)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.82)
 
-            Button("Scroll Down") {
+            Button(downTitle) {
                 bluetooth.sendScroll(dx: 0, dy: -1)
             }
             .buttonStyle(.bordered)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.82)
 
-            Button("Scroll Left") {
+            Button(leftTitle) {
                 bluetooth.sendScroll(dx: -1, dy: 0)
             }
             .buttonStyle(.bordered)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.82)
 
-            Button("Scroll Right") {
+            Button(rightTitle) {
                 bluetooth.sendScroll(dx: 1, dy: 0)
             }
             .buttonStyle(.bordered)
+            .controlSize(layout.isPhoneLayout ? .small : .regular)
             .lineLimit(1)
             .minimumScaleFactor(0.82)
         }
@@ -905,6 +951,8 @@ struct ContentView: View {
 
     private func modifierPanel(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            let releaseTitle = layout.isPhoneLayout ? "Release" : "Release All"
+
             if layout.isPhoneLayout {
                 Text("Modifiers")
                     .font(.subheadline)
@@ -912,7 +960,7 @@ struct ContentView: View {
 
                 HStack {
                     Spacer()
-                    Button("Release All") {
+                    Button(releaseTitle) {
                         releaseAllModifiers()
                     }
                     .buttonStyle(.bordered)
@@ -924,7 +972,7 @@ struct ContentView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Button("Release All") {
+                    Button(releaseTitle) {
                         releaseAllModifiers()
                     }
                     .buttonStyle(.bordered)
