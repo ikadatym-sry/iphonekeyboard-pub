@@ -1,0 +1,57 @@
+name: Build BLERemotePad IPA
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "*.swift"
+      - "Info.plist"
+      - "project.yml"
+      - ".github/workflows/build-ipa.yml"
+jobs:
+  justbuilditdiwaaisus:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Select Latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
+      - name: install xcodegen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate --spec project.yml
+      - name: build
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -project BLERemotePad.xcodeproj \
+            -scheme BLERemotePad \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            clean build
+      - name: verify
+        run: |
+          APP_PATH="build/Build/Products/Release-iphoneos/BLERemotePad.app"
+          INFO_PLIST="$APP_PATH/Info.plist"    
+          echo "Checking Info.plist at: $INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :NSBluetoothAlwaysUsageDescription" "$INFO_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :NSBluetoothPeripheralUsageDescription" "$INFO_PLIST"
+      - name: ipa test
+        run: |
+          mkdir -p build/Payload
+          cp -R build/Build/Products/Release-iphoneos/BLERemotePad.app build/Payload/
+          cd build
+          /usr/bin/zip -r BLERemotePad.ipa Payload
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLERemotePad-Latest
+          path: build/BLERemotePad.ipa
+          retention-days: 7
