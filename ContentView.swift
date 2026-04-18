@@ -779,7 +779,7 @@ struct ContentView: View {
     private func onScreenKeyboardPanel(layout: LayoutMetrics) -> some View {
         let useFlexiblePhoneKeys = layout.isPhoneLayout
 
-        VStack(spacing: layout.onScreenKeySpacing) {
+        return VStack(spacing: layout.onScreenKeySpacing) {
             ForEach(Array(onScreenLetterRows.enumerated()), id: \.offset) { rowIndex, row in
                 HStack(spacing: layout.onScreenKeySpacing) {
                     ForEach(row, id: \.self) { letter in
