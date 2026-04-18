@@ -332,71 +332,167 @@ struct ContentView: View {
         ["Z", "X", "C", "V", "B", "N", "M"]
     ]
 
+    private struct LayoutMetrics {
+        let horizontalPadding: CGFloat
+        let verticalPadding: CGFloat
+        let stackSpacing: CGFloat
+        let trackpadHeight: CGFloat
+        let splitTopCards: Bool
+        let controlButtonMinWidth: CGFloat
+        let navigationMinWidth: CGFloat
+        let functionMinWidth: CGFloat
+        let mediaMinWidth: CGFloat
+        let modifierMinWidth: CGFloat
+        let onScreenKeyFontSize: CGFloat
+        let onScreenKeySpacing: CGFloat
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                statusCard
-                wifiCard
-                trackpadCard
-                mouseButtonRow
-                scrollButtonRow
-                keyboardCard
-            }
-            .padding(16)
-        }
-        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .preferredColorScheme(selectedAppearanceMode.colorScheme)
-        .onAppear {
-            guard !loadedPersistedSettings else {
-                return
-            }
+        GeometryReader { proxy in
+            let layout = layoutMetrics(for: proxy.size)
 
-            if let savedAppearanceMode = AppAppearanceMode(rawValue: savedAppearanceModeRawValue) {
-                selectedAppearanceMode = savedAppearanceMode
+            ScrollView {
+                VStack(spacing: layout.stackSpacing) {
+                    topSection(layout: layout)
+                    trackpadCard(height: layout.trackpadHeight)
+                    mouseButtonRow(minWidth: layout.controlButtonMinWidth)
+                    scrollButtonRow(minWidth: layout.controlButtonMinWidth)
+                    keyboardCard(layout: layout)
+                }
+                .padding(.horizontal, layout.horizontalPadding)
+                .padding(.vertical, layout.verticalPadding)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+            .preferredColorScheme(selectedAppearanceMode.colorScheme)
+            .onAppear {
+                guard !loadedPersistedSettings else {
+                    return
+                }
 
-            if let savedPreset = ControlPreset(rawValue: savedPresetRawValue) {
-                selectedPreset = savedPreset
+                if let savedAppearanceMode = AppAppearanceMode(rawValue: savedAppearanceModeRawValue) {
+                    selectedAppearanceMode = savedAppearanceMode
+                }
+
+                if let savedPreset = ControlPreset(rawValue: savedPresetRawValue) {
+                    selectedPreset = savedPreset
+                }
+
+                pointerSensitivity = savedPointerSensitivity
+                scrollThreshold = savedScrollThreshold
+                webSocketURL = savedWebSocketURL
+                webSocketToken = savedWebSocketToken
+
+                if let savedKeyboardInputMode = KeyboardInputMode(rawValue: savedKeyboardInputModeRawValue) {
+                    keyboardInputMode = savedKeyboardInputMode
+                }
+
+                loadedPersistedSettings = true
             }
-
-            pointerSensitivity = savedPointerSensitivity
-            scrollThreshold = savedScrollThreshold
-            webSocketURL = savedWebSocketURL
-            webSocketToken = savedWebSocketToken
-
-            if let savedKeyboardInputMode = KeyboardInputMode(rawValue: savedKeyboardInputModeRawValue) {
-                keyboardInputMode = savedKeyboardInputMode
+            .onChange(of: selectedPreset) { newPreset in
+                pointerSensitivity = newPreset.pointerSensitivity
+                scrollThreshold = newPreset.scrollThreshold
+                savedPresetRawValue = newPreset.rawValue
+                savedPointerSensitivity = newPreset.pointerSensitivity
+                savedScrollThreshold = newPreset.scrollThreshold
             }
+            .onChange(of: selectedAppearanceMode) { newValue in
+                savedAppearanceModeRawValue = newValue.rawValue
+            }
+            .onChange(of: pointerSensitivity) { newValue in
+                savedPointerSensitivity = newValue
+            }
+            .onChange(of: scrollThreshold) { newValue in
+                savedScrollThreshold = newValue
+            }
+            .onChange(of: webSocketURL) { newValue in
+                savedWebSocketURL = newValue
+            }
+            .onChange(of: webSocketToken) { newValue in
+                savedWebSocketToken = newValue
+            }
+            .onChange(of: keyboardInputMode) { newValue in
+                savedKeyboardInputModeRawValue = newValue.rawValue
+            }
+            .onDisappear {
+                releaseAllModifiers()
+            }
+        }
+    }
 
-            loadedPersistedSettings = true
+    private func layoutMetrics(for size: CGSize) -> LayoutMetrics {
+        let shortestSide = min(size.width, size.height)
+        let isPadLike = size.width >= 800 || shortestSide >= 700
+        let isLandscape = size.width > size.height
+
+        if isPadLike {
+            let trackpadHeight = min(max(size.height * (isLandscape ? 0.44 : 0.34), 280), 420)
+            return LayoutMetrics(
+                horizontalPadding: 24,
+                verticalPadding: 20,
+                stackSpacing: 18,
+                trackpadHeight: trackpadHeight,
+                splitTopCards: true,
+                controlButtonMinWidth: 150,
+                navigationMinWidth: 96,
+                functionMinWidth: 68,
+                mediaMinWidth: 84,
+                modifierMinWidth: 96,
+                onScreenKeyFontSize: 14,
+                onScreenKeySpacing: 6
+            )
         }
-        .onChange(of: selectedPreset) { newPreset in
-            pointerSensitivity = newPreset.pointerSensitivity
-            scrollThreshold = newPreset.scrollThreshold
-            savedPresetRawValue = newPreset.rawValue
-            savedPointerSensitivity = newPreset.pointerSensitivity
-            savedScrollThreshold = newPreset.scrollThreshold
+
+        if size.width >= 390 {
+            let trackpadHeight = min(max(size.height * (isLandscape ? 0.42 : 0.32), 240), 340)
+            return LayoutMetrics(
+                horizontalPadding: 16,
+                verticalPadding: 14,
+                stackSpacing: 14,
+                trackpadHeight: trackpadHeight,
+                splitTopCards: false,
+                controlButtonMinWidth: 108,
+                navigationMinWidth: 82,
+                functionMinWidth: 60,
+                mediaMinWidth: 72,
+                modifierMinWidth: 84,
+                onScreenKeyFontSize: 12,
+                onScreenKeySpacing: 4
+            )
         }
-        .onChange(of: selectedAppearanceMode) { newValue in
-            savedAppearanceModeRawValue = newValue.rawValue
-        }
-        .onChange(of: pointerSensitivity) { newValue in
-            savedPointerSensitivity = newValue
-        }
-        .onChange(of: scrollThreshold) { newValue in
-            savedScrollThreshold = newValue
-        }
-        .onChange(of: webSocketURL) { newValue in
-            savedWebSocketURL = newValue
-        }
-        .onChange(of: webSocketToken) { newValue in
-            savedWebSocketToken = newValue
-        }
-        .onChange(of: keyboardInputMode) { newValue in
-            savedKeyboardInputModeRawValue = newValue.rawValue
-        }
-        .onDisappear {
-            releaseAllModifiers()
+
+        let trackpadHeight = min(max(size.height * (isLandscape ? 0.40 : 0.30), 210), 300)
+        return LayoutMetrics(
+            horizontalPadding: 12,
+            verticalPadding: 12,
+            stackSpacing: 12,
+            trackpadHeight: trackpadHeight,
+            splitTopCards: false,
+            controlButtonMinWidth: 96,
+            navigationMinWidth: 72,
+            functionMinWidth: 52,
+            mediaMinWidth: 62,
+            modifierMinWidth: 74,
+            onScreenKeyFontSize: 11,
+            onScreenKeySpacing: 4
+        )
+    }
+
+    private func topSection(layout: LayoutMetrics) -> some View {
+        Group {
+            if layout.splitTopCards {
+                HStack(alignment: .top, spacing: layout.stackSpacing) {
+                    statusCard
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    wifiCard
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                VStack(spacing: layout.stackSpacing) {
+                    statusCard
+                    wifiCard
+                }
+            }
         }
     }
 
@@ -515,7 +611,7 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private var trackpadCard: some View {
+    private func trackpadCard(height: CGFloat) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 18)
                 .fill(
@@ -564,12 +660,12 @@ struct ContentView: View {
             )
             .contentShape(Rectangle())
         }
-        .frame(height: 280)
+        .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    private var mouseButtonRow: some View {
-        HStack(spacing: 12) {
+    private func mouseButtonRow(minWidth: CGFloat) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: minWidth), spacing: 8)], spacing: 8) {
             Button("Left Click") {
                 bluetooth.sendMouseButton(button: .left, action: .click)
             }
@@ -587,7 +683,7 @@ struct ContentView: View {
         }
     }
 
-    private var keyboardCard: some View {
+    private func keyboardCard(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Keyboard")
                 .font(.headline)
@@ -615,15 +711,15 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                 }
             } else {
-                onScreenKeyboardPanel
+                onScreenKeyboardPanel(layout: layout)
             }
 
-            modifierPanel
+            modifierPanel(layout: layout)
 
             Text("Navigation")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 82), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.navigationMinWidth), spacing: 8)], spacing: 8) {
                 ForEach(quickKeys) { key in
                     Button(key.title) {
                         bluetooth.sendKey(usageID: key.usageID, action: .tap)
@@ -635,7 +731,7 @@ struct ContentView: View {
             Text("Function")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 60), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.functionMinWidth), spacing: 8)], spacing: 8) {
                 ForEach(functionKeys) { key in
                     Button(key.title) {
                         bluetooth.sendKey(usageID: key.usageID, action: .tap)
@@ -647,7 +743,7 @@ struct ContentView: View {
             Text("Media")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.mediaMinWidth), spacing: 8)], spacing: 8) {
                 ForEach(mediaKeys) { key in
                     Button(key.title) {
                         bluetooth.sendConsumerKey(usageID: key.usageID, action: .tap)
@@ -661,16 +757,16 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private var onScreenKeyboardPanel: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func onScreenKeyboardPanel(layout: LayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: layout.onScreenKeySpacing) {
             ForEach(onScreenLetterRows, id: \.self) { row in
-                HStack(spacing: 4) {
+                HStack(spacing: layout.onScreenKeySpacing) {
                     ForEach(row, id: \.self) { letter in
                         Button(letter) {
                             sendLetterTap(letter)
                         }
                         .buttonStyle(.bordered)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
@@ -678,12 +774,12 @@ struct ContentView: View {
                 }
             }
 
-            HStack(spacing: 4) {
+            HStack(spacing: layout.onScreenKeySpacing) {
                 Button("Space") {
                     bluetooth.sendKey(usageID: 0x2C, action: .tap)
                 }
                 .buttonStyle(.bordered)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
@@ -692,7 +788,7 @@ struct ContentView: View {
                     bluetooth.sendKey(usageID: 0x2A, action: .tap)
                 }
                 .buttonStyle(.bordered)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
@@ -701,7 +797,7 @@ struct ContentView: View {
                     bluetooth.sendKey(usageID: 0x28, action: .tap)
                 }
                 .buttonStyle(.bordered)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: layout.onScreenKeyFontSize, weight: .semibold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
@@ -709,8 +805,8 @@ struct ContentView: View {
         }
     }
 
-    private var scrollButtonRow: some View {
-        HStack(spacing: 12) {
+    private func scrollButtonRow(minWidth: CGFloat) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: minWidth), spacing: 8)], spacing: 8) {
             Button("Scroll Up") {
                 bluetooth.sendScroll(dx: 0, dy: 1)
             }
@@ -733,7 +829,7 @@ struct ContentView: View {
         }
     }
 
-    private var modifierPanel: some View {
+    private func modifierPanel(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Modifiers")
@@ -746,7 +842,7 @@ struct ContentView: View {
                 .buttonStyle(.bordered)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 8)], spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.modifierMinWidth), spacing: 8)], spacing: 8) {
                 ForEach(modifierKeys) { key in
                     let isActive = activeModifierUsageIDs.contains(key.usageID)
                     Button(key.title) {
