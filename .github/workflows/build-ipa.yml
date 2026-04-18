@@ -43,7 +43,7 @@ jobs:
           echo "Checking Info.plist at: $INFO_PLIST"
           /usr/libexec/PlistBuddy -c "Print :NSBluetoothAlwaysUsageDescription" "$INFO_PLIST"
           /usr/libexec/PlistBuddy -c "Print :NSBluetoothPeripheralUsageDescription" "$INFO_PLIST"
-      - name: package for TrollStore
+      - name: package IPA and TIPA
         run: |
           set -eo pipefail
 
@@ -65,13 +65,17 @@ jobs:
           /usr/bin/ditto "$APP_PATH" "build/Payload/$APP_NAME"
 
           cd build
+          /usr/bin/zip -qry BLERemotePad.ipa Payload
           /usr/bin/zip -qry BLERemotePad.tipa Payload
 
-          echo "Verifying TrollStore payload structure..."
+          echo "Verifying package payload structure..."
+          /usr/bin/unzip -l BLERemotePad.ipa | /usr/bin/grep -E 'Payload/[^/]+\.app/Info\.plist$'
           /usr/bin/unzip -l BLERemotePad.tipa | /usr/bin/grep -E 'Payload/[^/]+\.app/Info\.plist$'
       - name: upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: BLERemotePad-Latest
-          path: build/BLERemotePad.tipa
+          path: |
+            build/BLERemotePad.ipa
+            build/BLERemotePad.tipa
           retention-days: 7
