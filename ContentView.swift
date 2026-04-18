@@ -334,7 +334,7 @@ struct ContentView: View {
 
     private struct LayoutMetrics {
         let isPadLayout: Bool
-        let isCompactPhone: Bool
+        let isPhoneLayout: Bool
         let horizontalPadding: CGFloat
         let verticalPadding: CGFloat
         let stackSpacing: CGFloat
@@ -362,8 +362,8 @@ struct ContentView: View {
                 VStack(spacing: layout.stackSpacing) {
                     topSection(layout: layout)
                     trackpadCard(height: layout.trackpadHeight)
-                    mouseButtonRow(minWidth: layout.controlButtonMinWidth)
-                    scrollButtonRow(minWidth: layout.controlButtonMinWidth)
+                    mouseButtonRow(layout: layout)
+                    scrollButtonRow(layout: layout)
                     keyboardCard(layout: layout)
                 }
                 .padding(.horizontal, layout.horizontalPadding)
@@ -428,18 +428,14 @@ struct ContentView: View {
     }
 
     private func layoutMetrics(for size: CGSize) -> LayoutMetrics {
-        let shortestSide = min(size.width, size.height)
-        let isPadDevice = UIDevice.current.userInterfaceIdiom == .pad
-        let isPadLike = isPadDevice || shortestSide >= 700
-        let isCompactPhone = !isPadLike && shortestSide <= 430
         let isLandscape = size.width > size.height
-        let isWidePhoneLandscape = !isPadLike && isLandscape && size.width >= 760
+        let isPadLayout = UIDevice.current.userInterfaceIdiom == .pad
 
-        if isPadLike {
+        if isPadLayout {
             let trackpadHeight = min(max(size.height * (isLandscape ? 0.44 : 0.34), 280), 420)
             return LayoutMetrics(
                 isPadLayout: true,
-                isCompactPhone: false,
+                isPhoneLayout: false,
                 horizontalPadding: 24,
                 verticalPadding: 20,
                 stackSpacing: 18,
@@ -460,52 +456,27 @@ struct ContentView: View {
             )
         }
 
-        if size.width >= 390 {
-            let trackpadHeight = min(max(size.height * (isLandscape ? 0.24 : 0.23), isLandscape ? 130 : 155), isLandscape ? 180 : 220)
-            return LayoutMetrics(
-                isPadLayout: false,
-                isCompactPhone: isCompactPhone,
-                horizontalPadding: isLandscape ? 6 : 8,
-                verticalPadding: isLandscape ? 8 : 9,
-                stackSpacing: isLandscape ? 8 : 9,
-                trackpadHeight: trackpadHeight,
-                splitTopCards: isWidePhoneLandscape,
-                controlButtonMinWidth: isLandscape ? 98 : 88,
-                navigationMinWidth: isLandscape ? 70 : 62,
-                functionMinWidth: isLandscape ? 52 : 50,
-                mediaMinWidth: isLandscape ? 64 : 58,
-                modifierMinWidth: isLandscape ? 76 : 66,
-                onScreenKeyFontSize: isLandscape ? 12 : 13,
-                onScreenKeySpacing: 4,
-                onScreenKeyWidth: isLandscape ? 34 : 36,
-                onScreenKeyHeight: isLandscape ? 34 : 36,
-                onScreenActionKeyWidth: isLandscape ? 104 : 100,
-                onScreenSpaceKeyWidth: isLandscape ? 184 : 162,
-                cardPadding: isLandscape ? 8 : 9
-            )
-        }
-
-        let trackpadHeight = min(max(size.height * (isLandscape ? 0.34 : 0.30), isLandscape ? 170 : 210), isLandscape ? 220 : 300)
+        let trackpadHeight = min(max(size.height * (isLandscape ? 0.22 : 0.23), isLandscape ? 130 : 155), isLandscape ? 175 : 220)
         return LayoutMetrics(
             isPadLayout: false,
-            isCompactPhone: true,
-            horizontalPadding: isLandscape ? 10 : 12,
-            verticalPadding: 12,
-            stackSpacing: 12,
+            isPhoneLayout: true,
+            horizontalPadding: isLandscape ? 6 : 8,
+            verticalPadding: isLandscape ? 8 : 9,
+            stackSpacing: isLandscape ? 8 : 9,
             trackpadHeight: trackpadHeight,
-            splitTopCards: isWidePhoneLandscape,
-            controlButtonMinWidth: isLandscape ? 112 : 96,
-            navigationMinWidth: isLandscape ? 78 : 72,
-            functionMinWidth: isLandscape ? 56 : 52,
-            mediaMinWidth: isLandscape ? 66 : 62,
-            modifierMinWidth: isLandscape ? 78 : 74,
-            onScreenKeyFontSize: isLandscape ? 10 : 11,
+            splitTopCards: isLandscape && size.width >= 760,
+            controlButtonMinWidth: isLandscape ? 98 : 110,
+            navigationMinWidth: isLandscape ? 70 : 62,
+            functionMinWidth: isLandscape ? 52 : 50,
+            mediaMinWidth: isLandscape ? 64 : 58,
+            modifierMinWidth: isLandscape ? 76 : 66,
+            onScreenKeyFontSize: isLandscape ? 11 : 12,
             onScreenKeySpacing: 4,
-            onScreenKeyWidth: isLandscape ? 26 : 27,
-            onScreenKeyHeight: isLandscape ? 30 : 31,
-            onScreenActionKeyWidth: isLandscape ? 90 : 88,
-            onScreenSpaceKeyWidth: isLandscape ? 142 : 128,
-            cardPadding: 10
+            onScreenKeyWidth: 34,
+            onScreenKeyHeight: isLandscape ? 34 : 36,
+            onScreenActionKeyWidth: isLandscape ? 104 : 100,
+            onScreenSpaceKeyWidth: isLandscape ? 184 : 162,
+            cardPadding: isLandscape ? 8 : 9
         )
     }
 
@@ -530,9 +501,9 @@ struct ContentView: View {
     private func statusCard(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Bluetooth Remote เพราะกู ขก. ลุก")
-                .font(layout.isCompactPhone ? .headline : (layout.isPadLayout ? .title2 : .title3))
+                .font(layout.isPadLayout ? .title2 : .headline)
                 .bold()
-                .lineLimit(layout.isCompactPhone ? 2 : (layout.isPadLayout ? 2 : 3))
+                .lineLimit(2)
                 .minimumScaleFactor(0.82)
             Text(bluetooth.stateSummary)
                 .font(.subheadline)
@@ -614,7 +585,7 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.isCompactPhone ? 98 : 120), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.isPhoneLayout ? 104 : 120), spacing: 10)], spacing: 10) {
                 Button("Auto Discover") {
                     bluetooth.discoverWebSocketServer { discoveredURL in
                         guard let discoveredURL else {
@@ -698,22 +669,32 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    private func mouseButtonRow(minWidth: CGFloat) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: minWidth), spacing: 8)], spacing: 8) {
+    private func mouseButtonRow(layout: LayoutMetrics) -> some View {
+        let columns: [GridItem] = layout.isPhoneLayout
+            ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+            : [GridItem(.adaptive(minimum: layout.controlButtonMinWidth), spacing: 8)]
+
+        return LazyVGrid(columns: columns, spacing: 8) {
             Button("Left Click") {
                 bluetooth.sendMouseButton(button: .left, action: .click)
             }
             .buttonStyle(.borderedProminent)
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
 
             Button("Middle") {
                 bluetooth.sendMouseButton(button: .middle, action: .click)
             }
             .buttonStyle(.bordered)
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
 
             Button("Right Click") {
                 bluetooth.sendMouseButton(button: .right, action: .click)
             }
             .buttonStyle(.bordered)
+            .lineLimit(1)
+            .minimumScaleFactor(0.78)
         }
     }
 
@@ -796,15 +777,18 @@ struct ContentView: View {
     }
 
     private func onScreenKeyboardPanel(layout: LayoutMetrics) -> some View {
+        let useFlexiblePhoneKeys = layout.isPhoneLayout
+
         VStack(spacing: layout.onScreenKeySpacing) {
             ForEach(Array(onScreenLetterRows.enumerated()), id: \.offset) { rowIndex, row in
                 HStack(spacing: layout.onScreenKeySpacing) {
                     ForEach(row, id: \.self) { letter in
                         onScreenKeyButton(
                             title: letter,
-                            width: layout.onScreenKeyWidth,
+                            width: useFlexiblePhoneKeys ? nil : layout.onScreenKeyWidth,
                             height: layout.onScreenKeyHeight,
-                            fontSize: layout.onScreenKeyFontSize
+                            fontSize: layout.onScreenKeyFontSize,
+                            expandToFill: useFlexiblePhoneKeys
                         ) {
                             sendLetterTap(letter)
                         }
@@ -817,27 +801,30 @@ struct ContentView: View {
             HStack(spacing: layout.onScreenKeySpacing) {
                 onScreenKeyButton(
                     title: "Space",
-                    width: layout.onScreenSpaceKeyWidth,
+                    width: useFlexiblePhoneKeys ? nil : layout.onScreenSpaceKeyWidth,
                     height: layout.onScreenKeyHeight,
-                    fontSize: layout.onScreenKeyFontSize
+                    fontSize: layout.onScreenKeyFontSize,
+                    expandToFill: useFlexiblePhoneKeys
                 ) {
                     bluetooth.sendKey(usageID: 0x2C, action: .tap)
                 }
 
                 onScreenKeyButton(
                     title: "Backspace",
-                    width: layout.onScreenActionKeyWidth,
+                    width: useFlexiblePhoneKeys ? nil : layout.onScreenActionKeyWidth,
                     height: layout.onScreenKeyHeight,
-                    fontSize: layout.onScreenKeyFontSize
+                    fontSize: layout.onScreenKeyFontSize,
+                    expandToFill: useFlexiblePhoneKeys
                 ) {
                     bluetooth.sendKey(usageID: 0x2A, action: .tap)
                 }
 
                 onScreenKeyButton(
                     title: "Enter",
-                    width: layout.onScreenActionKeyWidth,
+                    width: useFlexiblePhoneKeys ? nil : layout.onScreenActionKeyWidth,
                     height: layout.onScreenKeyHeight,
-                    fontSize: layout.onScreenKeyFontSize
+                    fontSize: layout.onScreenKeyFontSize,
+                    expandToFill: useFlexiblePhoneKeys
                 ) {
                     bluetooth.sendKey(usageID: 0x28, action: .tap)
                 }
@@ -863,9 +850,10 @@ struct ContentView: View {
 
     private func onScreenKeyButton(
         title: String,
-        width: CGFloat,
+        width: CGFloat?,
         height: CGFloat,
         fontSize: CGFloat,
+        expandToFill: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
         Button(title) {
@@ -874,37 +862,50 @@ struct ContentView: View {
         .buttonStyle(.bordered)
         .font(.system(size: fontSize, weight: .semibold, design: .rounded))
         .lineLimit(1)
-        .minimumScaleFactor(0.7)
+        .minimumScaleFactor(0.85)
+        .frame(maxWidth: expandToFill ? .infinity : nil)
         .frame(width: width, height: height)
     }
 
-    private func scrollButtonRow(minWidth: CGFloat) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: minWidth), spacing: 8)], spacing: 8) {
+    private func scrollButtonRow(layout: LayoutMetrics) -> some View {
+        let columns: [GridItem] = layout.isPhoneLayout
+            ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 2)
+            : [GridItem(.adaptive(minimum: layout.controlButtonMinWidth), spacing: 8)]
+
+        return LazyVGrid(columns: columns, spacing: 8) {
             Button("Scroll Up") {
                 bluetooth.sendScroll(dx: 0, dy: 1)
             }
             .buttonStyle(.bordered)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
 
             Button("Scroll Down") {
                 bluetooth.sendScroll(dx: 0, dy: -1)
             }
             .buttonStyle(.bordered)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
 
             Button("Scroll Left") {
                 bluetooth.sendScroll(dx: -1, dy: 0)
             }
             .buttonStyle(.bordered)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
 
             Button("Scroll Right") {
                 bluetooth.sendScroll(dx: 1, dy: 0)
             }
             .buttonStyle(.bordered)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
         }
     }
 
     private func modifierPanel(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if layout.isCompactPhone {
+            if layout.isPhoneLayout {
                 Text("Modifiers")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
