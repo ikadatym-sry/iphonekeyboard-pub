@@ -107,6 +107,22 @@ enum KeyboardInputMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum PhoneWorkspaceSection: String, CaseIterable, Identifiable {
+    case controls
+    case settings
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .controls:
+            return "Controls"
+        case .settings:
+            return "Settings"
+        }
+    }
+}
+
 struct TrackpadGestureSurface: UIViewRepresentable {
     var sensitivity: Double
     var scrollThreshold: Double
@@ -276,6 +292,7 @@ struct ContentView: View {
     @AppStorage("remotePad.savedWebSocketToken") private var savedWebSocketToken = "remotepad-token"
     @AppStorage("remotePad.savedKeyboardInputMode") private var savedKeyboardInputModeRawValue = KeyboardInputMode.sendText.rawValue
     @AppStorage("remotePad.savedDeviceName") private var savedDeviceName = "iPhoneRemotePad"
+    @AppStorage("remotePad.savedPhoneWorkspaceSection") private var savedPhoneWorkspaceSectionRawValue = PhoneWorkspaceSection.controls.rawValue
     @AppStorage("remotePad.requireSecureWebSocket") private var requireSecureWebSocket = false
 
     @State private var textToSend = ""
@@ -287,6 +304,7 @@ struct ContentView: View {
     @State private var webSocketURL = "ws://192.168.1.100:8765"
     @State private var webSocketToken = "remotepad-token"
     @State private var deviceName = "iPhoneRemotePad"
+    @State private var phoneWorkspaceSection: PhoneWorkspaceSection = .controls
     @State private var activeModifierUsageIDs: Set<UInt16> = []
     @State private var loadedPersistedSettings = false
 
@@ -363,11 +381,25 @@ struct ContentView: View {
 
             ScrollView {
                 VStack(spacing: layout.stackSpacing) {
-                    topSection(layout: layout)
-                    trackpadCard(height: layout.trackpadHeight)
-                    mouseButtonRow(layout: layout)
-                    scrollButtonRow(layout: layout)
-                    keyboardCard(layout: layout)
+                    if layout.isPhoneLayout {
+                        phoneWorkspacePicker
+
+                        if phoneWorkspaceSection == .controls {
+                            compactBLECard(layout: layout)
+                            trackpadCard(height: layout.trackpadHeight, layout: layout)
+                            mouseButtonRow(layout: layout)
+                            scrollButtonRow(layout: layout)
+                            keyboardCard(layout: layout)
+                        } else {
+                            topSection(layout: layout)
+                        }
+                    } else {
+                        topSection(layout: layout)
+                        trackpadCard(height: layout.trackpadHeight, layout: layout)
+                        mouseButtonRow(layout: layout)
+                        scrollButtonRow(layout: layout)
+                        keyboardCard(layout: layout)
+                    }
                 }
                 .padding(.horizontal, layout.horizontalPadding)
                 .padding(.vertical, layout.verticalPadding)
@@ -401,6 +433,10 @@ struct ContentView: View {
                     keyboardInputMode = savedKeyboardInputMode
                 }
 
+                if let savedPhoneWorkspaceSection = PhoneWorkspaceSection(rawValue: savedPhoneWorkspaceSectionRawValue) {
+                    phoneWorkspaceSection = savedPhoneWorkspaceSection
+                }
+
                 loadedPersistedSettings = true
             }
             .onChange(of: selectedPreset) { newPreset in
@@ -427,6 +463,9 @@ struct ContentView: View {
             }
             .onChange(of: keyboardInputMode) { newValue in
                 savedKeyboardInputModeRawValue = newValue.rawValue
+            }
+            .onChange(of: phoneWorkspaceSection) { newValue in
+                savedPhoneWorkspaceSectionRawValue = newValue.rawValue
             }
             .onChange(of: deviceName) { newValue in
                 bluetooth.setAdvertisingName(newValue)
@@ -471,7 +510,7 @@ struct ContentView: View {
             )
         }
 
-        let trackpadHeight = min(max(size.height * (isLandscape ? 0.22 : 0.23), isLandscape ? 130 : 155), isLandscape ? 175 : 220)
+        let trackpadHeight = min(max(size.height * (isLandscape ? 0.20 : 0.19), isLandscape ? 120 : 138), isLandscape ? 165 : 190)
         return LayoutMetrics(
             isPadLayout: false,
             isPhoneLayout: true,
@@ -514,6 +553,49 @@ struct ContentView: View {
         }
     }
 
+    private var phoneWorkspacePicker: some View {
+        Picker("Workspace", selection: $phoneWorkspaceSection) {
+            ForEach(PhoneWorkspaceSection.allCases) { section in
+                Text(section.title).tag(section)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    private func compactBLECard(layout: LayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bluetooth.isAdvertising ? "BLE Ready" : "BLE Paused")
+                        .font(.subheadline)
+                        .bold()
+                    Text(bluetooth.stateSummary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                Button(bluetooth.isAdvertising || bluetooth.subscribedCentralCount > 0 ? "Disconnect" : "Enable") {
+                    bluetooth.toggleBluetoothConnection()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .lineLimit(1)
+            }
+
+            if bluetooth.subscribedCentralCount > 0 {
+                Text("Connected BLE clients: \(bluetooth.subscribedCentralCount)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(layout.cardPadding)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
     private func statusCard(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Bluetooth Remote เพราะกู ขก. ลุก")
@@ -554,14 +636,14 @@ struct ContentView: View {
                     Text(mode.title).tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(layout.isPhoneLayout ? .menu : .segmented)
 
             Picker("Control Profile", selection: $selectedPreset) {
                 ForEach(ControlPreset.allCases) { preset in
                     Text(preset.title).tag(preset)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(layout.isPhoneLayout ? .menu : .segmented)
             HStack {
                 Text("Sensitivity")
                 Slider(value: $pointerSensitivity, in: 0.5...3.0)
@@ -641,7 +723,7 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 
-    private func trackpadCard(height: CGFloat) -> some View {
+    private func trackpadCard(height: CGFloat, layout: LayoutMetrics) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 18)
                 .fill(
@@ -656,16 +738,26 @@ struct ContentView: View {
 
             VStack(spacing: 8) {
                 Image(systemName: "cursorarrow.motionlines")
-                    .font(.system(size: 36))
+                    .font(.system(size: layout.isPhoneLayout ? 30 : 36))
                     .foregroundColor(colorScheme == .dark ? .cyan.opacity(0.9) : .blue.opacity(0.9))
                 Text("แตะกู กูบอกให้มึงแตะกู")
-                    .font(.headline)
-                //Text("1 finger move, 2 finger scroll, double-tap left click, long-press right click")
-                Text("คือกูขี้เกียจลุกมากๆ กูเลยทำแอพนี้มาใช้เอง จะได้ไม่ต้องลุกไปจับเม้าส์ พอกูจะหาแอปแบบนี้ใน App Store แม่งก็เสือกมีโฆษณาเต็มแอป หรือไม่ก็กูต้องจ่ายตังซื้อแอปหลอกแดกตังโง่ๆ ควย ไอ่เหี้ย")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 18)
+                    .font(layout.isPhoneLayout ? .subheadline : .headline)
+                    .lineLimit(layout.isPhoneLayout ? 1 : nil)
+                    .minimumScaleFactor(0.84)
+
+                if layout.isPhoneLayout {
+                    Text("1 finger move, 2 finger scroll, tap to click")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                } else {
+                    Text("คือกูขี้เกียจลุกมากๆ กูเลยทำแอพนี้มาใช้เอง จะได้ไม่ต้องลุกไปจับเม้าส์ พอกูจะหาแอปแบบนี้ใน App Store แม่งก็เสือกมีโฆษณาเต็มแอป หรือไม่ก็กูต้องจ่ายตังซื้อแอปหลอกแดกตังโง่ๆ ควย ไอ่เหี้ย")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 18)
+                }
             }
             .padding(12)
 
@@ -744,7 +836,7 @@ struct ContentView: View {
                     Text(mode.title).tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(layout.isPhoneLayout ? .menu : .segmented)
 
             if keyboardInputMode == .sendText {
                 VStack(spacing: 8) {
