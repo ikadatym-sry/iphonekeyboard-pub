@@ -334,6 +334,7 @@ struct ContentView: View {
 
     private struct LayoutMetrics {
         let isPadLayout: Bool
+        let isCompactPhone: Bool
         let horizontalPadding: CGFloat
         let verticalPadding: CGFloat
         let stackSpacing: CGFloat
@@ -430,6 +431,7 @@ struct ContentView: View {
         let shortestSide = min(size.width, size.height)
         let isPadDevice = UIDevice.current.userInterfaceIdiom == .pad
         let isPadLike = isPadDevice || shortestSide >= 700
+        let isCompactPhone = !isPadLike && shortestSide <= 430
         let isLandscape = size.width > size.height
         let isWidePhoneLandscape = !isPadLike && isLandscape && size.width >= 760
 
@@ -437,6 +439,7 @@ struct ContentView: View {
             let trackpadHeight = min(max(size.height * (isLandscape ? 0.44 : 0.34), 280), 420)
             return LayoutMetrics(
                 isPadLayout: true,
+                isCompactPhone: false,
                 horizontalPadding: 24,
                 verticalPadding: 20,
                 stackSpacing: 18,
@@ -447,43 +450,45 @@ struct ContentView: View {
                 functionMinWidth: 68,
                 mediaMinWidth: 84,
                 modifierMinWidth: 96,
-                onScreenKeyFontSize: 17,
+                onScreenKeyFontSize: 19,
                 onScreenKeySpacing: 8,
                 onScreenKeyWidth: 62,
-                onScreenKeyHeight: 44,
-                onScreenActionKeyWidth: 170,
-                onScreenSpaceKeyWidth: 300,
+                onScreenKeyHeight: 48,
+                onScreenActionKeyWidth: 176,
+                onScreenSpaceKeyWidth: 308,
                 cardPadding: 14
             )
         }
 
         if size.width >= 390 {
-            let trackpadHeight = min(max(size.height * (isLandscape ? 0.30 : 0.29), isLandscape ? 160 : 210), isLandscape ? 218 : 300)
+            let trackpadHeight = min(max(size.height * (isLandscape ? 0.24 : 0.23), isLandscape ? 130 : 155), isLandscape ? 180 : 220)
             return LayoutMetrics(
                 isPadLayout: false,
-                horizontalPadding: isLandscape ? 8 : 10,
-                verticalPadding: isLandscape ? 10 : 11,
-                stackSpacing: isLandscape ? 10 : 11,
+                isCompactPhone: isCompactPhone,
+                horizontalPadding: isLandscape ? 6 : 8,
+                verticalPadding: isLandscape ? 8 : 9,
+                stackSpacing: isLandscape ? 8 : 9,
                 trackpadHeight: trackpadHeight,
                 splitTopCards: isWidePhoneLandscape,
-                controlButtonMinWidth: isLandscape ? 108 : 92,
-                navigationMinWidth: isLandscape ? 82 : 68,
-                functionMinWidth: isLandscape ? 58 : 54,
-                mediaMinWidth: isLandscape ? 70 : 64,
-                modifierMinWidth: isLandscape ? 82 : 72,
-                onScreenKeyFontSize: isLandscape ? 11 : 12,
+                controlButtonMinWidth: isLandscape ? 98 : 88,
+                navigationMinWidth: isLandscape ? 70 : 62,
+                functionMinWidth: isLandscape ? 52 : 50,
+                mediaMinWidth: isLandscape ? 64 : 58,
+                modifierMinWidth: isLandscape ? 76 : 66,
+                onScreenKeyFontSize: isLandscape ? 12 : 13,
                 onScreenKeySpacing: 4,
-                onScreenKeyWidth: isLandscape ? 31 : 33,
-                onScreenKeyHeight: isLandscape ? 32 : 34,
-                onScreenActionKeyWidth: isLandscape ? 102 : 96,
-                onScreenSpaceKeyWidth: isLandscape ? 178 : 152,
-                cardPadding: isLandscape ? 10 : 11
+                onScreenKeyWidth: isLandscape ? 34 : 36,
+                onScreenKeyHeight: isLandscape ? 34 : 36,
+                onScreenActionKeyWidth: isLandscape ? 104 : 100,
+                onScreenSpaceKeyWidth: isLandscape ? 184 : 162,
+                cardPadding: isLandscape ? 8 : 9
             )
         }
 
         let trackpadHeight = min(max(size.height * (isLandscape ? 0.34 : 0.30), isLandscape ? 170 : 210), isLandscape ? 220 : 300)
         return LayoutMetrics(
             isPadLayout: false,
+            isCompactPhone: true,
             horizontalPadding: isLandscape ? 10 : 12,
             verticalPadding: 12,
             stackSpacing: 12,
@@ -525,9 +530,9 @@ struct ContentView: View {
     private func statusCard(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Bluetooth Remote เพราะกู ขก. ลุก")
-                .font(layout.isPadLayout ? .title2 : .title3)
+                .font(layout.isCompactPhone ? .headline : (layout.isPadLayout ? .title2 : .title3))
                 .bold()
-                .lineLimit(layout.isPadLayout ? 2 : 3)
+                .lineLimit(layout.isCompactPhone ? 2 : (layout.isPadLayout ? 2 : 3))
                 .minimumScaleFactor(0.82)
             Text(bluetooth.stateSummary)
                 .font(.subheadline)
@@ -609,7 +614,7 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
             }
 
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 10)], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.isCompactPhone ? 98 : 120), spacing: 10)], spacing: 10) {
                 Button("Auto Discover") {
                     bluetooth.discoverWebSocketServer { discoveredURL in
                         guard let discoveredURL else {
@@ -899,15 +904,30 @@ struct ContentView: View {
 
     private func modifierPanel(layout: LayoutMetrics) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            if layout.isCompactPhone {
                 Text("Modifiers")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                Spacer()
-                Button("Release All") {
-                    releaseAllModifiers()
+
+                HStack {
+                    Spacer()
+                    Button("Release All") {
+                        releaseAllModifiers()
+                    }
+                    .buttonStyle(.bordered)
+                    .lineLimit(1)
                 }
-                .buttonStyle(.bordered)
+            } else {
+                HStack {
+                    Text("Modifiers")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("Release All") {
+                        releaseAllModifiers()
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.modifierMinWidth), spacing: 8)], spacing: 8) {
