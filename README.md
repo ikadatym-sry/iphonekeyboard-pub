@@ -19,12 +19,17 @@ This project now includes a dedicated Webcam tab on iOS.
 
 ### iOS setup
 1. Open the new `Webcam` workspace tab.
-2. Set URL to your Windows endpoint, for example:
+2. Choose transport mode: `Wi-Fi` or `USB`.
+3. Set URL to your Windows endpoint, for example:
 	- `ws://192.168.1.100:8767`
-3. Set token to match Windows receiver token.
-4. Choose resolution and FPS.
-5. `Enable microphone audio` default is OFF.
-6. Tap `Start Webcam`.
+   - USB mode commonly uses `ws://172.20.10.2:8767`
+4. Set token to match Windows receiver token.
+5. Choose resolution and FPS.
+6. `Enable microphone audio` default is OFF.
+7. Tap `Start Webcam`.
+
+### Screen Awake
+- In Settings workspace, enable `Keep screen awake` to prevent iPhone display sleep while using controls/webcam.
 
 ### Notes
 - iOS cannot expose native USB UVC directly; USB mode here means USB network tethering.

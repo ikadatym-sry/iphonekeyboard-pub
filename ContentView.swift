@@ -126,6 +126,22 @@ enum PhoneWorkspaceSection: String, CaseIterable, Identifiable {
     }
 }
 
+enum NetworkTransportMode: String, CaseIterable, Identifiable {
+    case wifi
+    case usb
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wifi:
+            return "Wi-Fi"
+        case .usb:
+            return "USB"
+        }
+    }
+}
+
 struct TrackpadGestureSurface: UIViewRepresentable {
     var sensitivity: Double
     var scrollThreshold: Double
@@ -292,17 +308,23 @@ struct ContentView: View {
     @AppStorage("remotePad.savedPreset") private var savedPresetRawValue = ControlPreset.balanced.rawValue
     @AppStorage("remotePad.savedPointerSensitivity") private var savedPointerSensitivity = ControlPreset.balanced.pointerSensitivity
     @AppStorage("remotePad.savedScrollThreshold") private var savedScrollThreshold = ControlPreset.balanced.scrollThreshold
-    @AppStorage("remotePad.savedWebSocketURL") private var savedWebSocketURL = "ws://192.168.1.100:8765"
+    @AppStorage("remotePad.savedWebSocketURL") private var legacySavedWebSocketURL = "ws://192.168.1.100:8765"
     @AppStorage("remotePad.savedWebSocketToken") private var savedWebSocketToken = "remotepad-token"
     @AppStorage("remotePad.savedKeyboardInputMode") private var savedKeyboardInputModeRawValue = KeyboardInputMode.sendText.rawValue
     @AppStorage("remotePad.savedDeviceName") private var savedDeviceName = "iPhoneRemotePad"
     @AppStorage("remotePad.savedPhoneWorkspaceSection") private var savedPhoneWorkspaceSectionRawValue = PhoneWorkspaceSection.controls.rawValue
     @AppStorage("remotePad.requireSecureWebSocket") private var requireSecureWebSocket = false
-    @AppStorage("remotePad.savedWebcamURL") private var savedWebcamURL = "ws://192.168.1.100:8767"
+    @AppStorage("remotePad.savedWebcamURL") private var legacySavedWebcamURL = "ws://192.168.1.100:8767"
     @AppStorage("remotePad.savedWebcamToken") private var savedWebcamToken = "remotepad-token"
     @AppStorage("remotePad.savedWebcamMicEnabled") private var savedWebcamMicEnabled = false
     @AppStorage("remotePad.savedWebcamResolution") private var savedWebcamResolutionRawValue = WebcamResolutionPreset.p1080.rawValue
     @AppStorage("remotePad.savedWebcamFPS") private var savedWebcamFPSRawValue = WebcamFPSPreset.fps30.rawValue
+    @AppStorage("remotePad.savedTransportMode") private var savedTransportModeRawValue = NetworkTransportMode.wifi.rawValue
+    @AppStorage("remotePad.savedWiFiWebSocketURL") private var savedWiFiWebSocketURL = "ws://192.168.1.100:8765"
+    @AppStorage("remotePad.savedUSBWebSocketURL") private var savedUSBWebSocketURL = "ws://172.20.10.2:8765"
+    @AppStorage("remotePad.savedWiFiWebcamURL") private var savedWiFiWebcamURL = "ws://192.168.1.100:8767"
+    @AppStorage("remotePad.savedUSBWebcamURL") private var savedUSBWebcamURL = "ws://172.20.10.2:8767"
+    @AppStorage("remotePad.keepScreenAwake") private var keepScreenAwake = true
 
     @State private var textToSend = ""
     @State private var keyboardInputMode: KeyboardInputMode = .sendText
@@ -310,11 +332,14 @@ struct ContentView: View {
     @State private var selectedPreset: ControlPreset = .balanced
     @State private var pointerSensitivity = ControlPreset.balanced.pointerSensitivity
     @State private var scrollThreshold = ControlPreset.balanced.scrollThreshold
-    @State private var webSocketURL = "ws://192.168.1.100:8765"
+    @State private var transportMode: NetworkTransportMode = .wifi
+    @State private var webSocketWiFiURL = "ws://192.168.1.100:8765"
+    @State private var webSocketUSBURL = "ws://172.20.10.2:8765"
     @State private var webSocketToken = "remotepad-token"
     @State private var deviceName = "iPhoneRemotePad"
     @State private var phoneWorkspaceSection: PhoneWorkspaceSection = .controls
-    @State private var webcamURL = "ws://192.168.1.100:8767"
+    @State private var webcamWiFiURL = "ws://192.168.1.100:8767"
+    @State private var webcamUSBURL = "ws://172.20.10.2:8767"
     @State private var webcamToken = "remotepad-token"
     @State private var webcamMicEnabled = false
     @State private var webcamResolution: WebcamResolutionPreset = .p1080
@@ -427,12 +452,30 @@ struct ContentView: View {
 
                 pointerSensitivity = savedPointerSensitivity
                 scrollThreshold = savedScrollThreshold
-                webSocketURL = savedWebSocketURL
                 webSocketToken = savedWebSocketToken
                 deviceName = savedDeviceName
                 bluetooth.setAdvertisingName(savedDeviceName)
                 deviceName = bluetooth.advertisingName
                 savedDeviceName = bluetooth.advertisingName
+
+                webSocketWiFiURL = savedWiFiWebSocketURL
+                webSocketUSBURL = savedUSBWebSocketURL
+                webcamWiFiURL = savedWiFiWebcamURL
+                webcamUSBURL = savedUSBWebcamURL
+
+                if webSocketWiFiURL == "ws://192.168.1.100:8765", !legacySavedWebSocketURL.isEmpty {
+                    webSocketWiFiURL = legacySavedWebSocketURL
+                    savedWiFiWebSocketURL = legacySavedWebSocketURL
+                }
+
+                if webcamWiFiURL == "ws://192.168.1.100:8767", !legacySavedWebcamURL.isEmpty {
+                    webcamWiFiURL = legacySavedWebcamURL
+                    savedWiFiWebcamURL = legacySavedWebcamURL
+                }
+
+                if let savedTransportMode = NetworkTransportMode(rawValue: savedTransportModeRawValue) {
+                    transportMode = savedTransportMode
+                }
 
                 if let savedKeyboardInputMode = KeyboardInputMode(rawValue: savedKeyboardInputModeRawValue) {
                     keyboardInputMode = savedKeyboardInputMode
@@ -442,7 +485,6 @@ struct ContentView: View {
                     phoneWorkspaceSection = savedPhoneWorkspaceSection
                 }
 
-                webcamURL = savedWebcamURL
                 webcamToken = savedWebcamToken
                 webcamMicEnabled = savedWebcamMicEnabled
 
@@ -453,6 +495,8 @@ struct ContentView: View {
                 if let savedWebcamFPS = WebcamFPSPreset(rawValue: savedWebcamFPSRawValue) {
                     webcamFPS = savedWebcamFPS
                 }
+
+                updateIdleTimerSetting()
 
                 loadedPersistedSettings = true
             }
@@ -472,8 +516,14 @@ struct ContentView: View {
             .onChange(of: scrollThreshold) { newValue in
                 savedScrollThreshold = newValue
             }
-            .onChange(of: webSocketURL) { newValue in
-                savedWebSocketURL = newValue
+            .onChange(of: transportMode) { newValue in
+                savedTransportModeRawValue = newValue.rawValue
+            }
+            .onChange(of: webSocketWiFiURL) { newValue in
+                savedWiFiWebSocketURL = newValue
+            }
+            .onChange(of: webSocketUSBURL) { newValue in
+                savedUSBWebSocketURL = newValue
             }
             .onChange(of: webSocketToken) { newValue in
                 savedWebSocketToken = newValue
@@ -484,8 +534,11 @@ struct ContentView: View {
             .onChange(of: phoneWorkspaceSection) { newValue in
                 savedPhoneWorkspaceSectionRawValue = newValue.rawValue
             }
-            .onChange(of: webcamURL) { newValue in
-                savedWebcamURL = newValue
+            .onChange(of: webcamWiFiURL) { newValue in
+                savedWiFiWebcamURL = newValue
+            }
+            .onChange(of: webcamUSBURL) { newValue in
+                savedUSBWebcamURL = newValue
             }
             .onChange(of: webcamToken) { newValue in
                 savedWebcamToken = newValue
@@ -499,6 +552,9 @@ struct ContentView: View {
             .onChange(of: webcamFPS) { newValue in
                 savedWebcamFPSRawValue = newValue.rawValue
             }
+            .onChange(of: keepScreenAwake) { _ in
+                updateIdleTimerSetting()
+            }
             .onChange(of: deviceName) { newValue in
                 bluetooth.setAdvertisingName(newValue)
                 if deviceName != bluetooth.advertisingName {
@@ -509,8 +565,55 @@ struct ContentView: View {
             .onDisappear {
                 releaseAllModifiers()
                 webcam.stopStreaming()
+                UIApplication.shared.isIdleTimerDisabled = false
             }
         }
+    }
+
+    private var activeControlURL: String {
+        transportMode == .wifi ? webSocketWiFiURL : webSocketUSBURL
+    }
+
+    private var activeWebcamURL: String {
+        transportMode == .wifi ? webcamWiFiURL : webcamUSBURL
+    }
+
+    private var activeControlURLBinding: Binding<String> {
+        Binding(
+            get: { activeControlURL },
+            set: { newValue in
+                setActiveControlURL(newValue)
+            }
+        )
+    }
+
+    private var activeWebcamURLBinding: Binding<String> {
+        Binding(
+            get: { activeWebcamURL },
+            set: { newValue in
+                setActiveWebcamURL(newValue)
+            }
+        )
+    }
+
+    private func setActiveControlURL(_ value: String) {
+        if transportMode == .wifi {
+            webSocketWiFiURL = value
+        } else {
+            webSocketUSBURL = value
+        }
+    }
+
+    private func setActiveWebcamURL(_ value: String) {
+        if transportMode == .wifi {
+            webcamWiFiURL = value
+        } else {
+            webcamUSBURL = value
+        }
+    }
+
+    private func updateIdleTimerSetting() {
+        UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
     }
 
     private func layoutMetrics(for size: CGSize) -> LayoutMetrics {
@@ -724,6 +827,9 @@ struct ContentView: View {
                     .font(.caption)
                     .frame(width: layout.isPadLayout ? 44 : 38, alignment: .trailing)
             }
+
+            Toggle("Keep screen awake", isOn: $keepScreenAwake)
+                .toggleStyle(.switch)
         }
         .padding(layout.cardPadding)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -735,11 +841,33 @@ struct ContentView: View {
             Text("Wifi connector")
                 .font(.headline)
 
+            if layout.isPhoneLayout {
+                Picker("Transport", selection: $transportMode) {
+                    ForEach(NetworkTransportMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else {
+                Picker("Transport", selection: $transportMode) {
+                    ForEach(NetworkTransportMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Text(bluetooth.wifiStatus)
                 .font(.footnote)
                 .foregroundColor(.secondary)
 
-            TextField("ws://<windows-ip>:8765", text: $webSocketURL)
+            Text(transportMode == .usb
+                    ? "USB mode uses iPhone Personal Hotspot network. Windows is commonly at 172.20.10.2."
+                    : "Wi-Fi mode uses your local LAN IP on Windows.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            TextField("ws://<windows-ip>:8765", text: activeControlURLBinding)
                 .textFieldStyle(.roundedBorder)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
@@ -764,14 +892,14 @@ struct ContentView: View {
                         guard let discoveredURL else {
                             return
                         }
-                        webSocketURL = discoveredURL
+                        setActiveControlURL(discoveredURL)
                     }
                 }
                 .buttonStyle(.bordered)
 
                 Button("Connect") {
                     bluetooth.connectWebSocket(
-                        urlString: webSocketURL.trimmingCharacters(in: .whitespacesAndNewlines),
+                        urlString: activeControlURL.trimmingCharacters(in: .whitespacesAndNewlines),
                         token: webSocketToken,
                         requireSecure: requireSecureWebSocket
                     )
@@ -794,8 +922,30 @@ struct ContentView: View {
             Text("Webcam")
                 .font(.headline)
 
+            if layout.isPhoneLayout {
+                Picker("Transport", selection: $transportMode) {
+                    ForEach(NetworkTransportMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else {
+                Picker("Transport", selection: $transportMode) {
+                    ForEach(NetworkTransportMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             Text(webcam.status)
                 .font(.footnote)
+                .foregroundColor(.secondary)
+
+            Text(transportMode == .usb
+                    ? "USB mode streams over Personal Hotspot network. Try ws://172.20.10.2:8767 first."
+                    : "Wi-Fi mode streams over local LAN.")
+                .font(.caption)
                 .foregroundColor(.secondary)
 
             WebcamPreviewView(session: webcam.captureSession)
@@ -806,7 +956,7 @@ struct ContentView: View {
                         .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
                 )
 
-            TextField("ws://<windows-ip>:8767", text: $webcamURL)
+            TextField("ws://<windows-ip>:8767", text: activeWebcamURLBinding)
                 .textFieldStyle(.roundedBorder)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled(true)
@@ -868,7 +1018,7 @@ struct ContentView: View {
 
                         components.port = 8767
                         if let wsURL = components.string {
-                            webcamURL = wsURL
+                            setActiveWebcamURL(wsURL)
                         }
                     }
                 }
@@ -876,7 +1026,7 @@ struct ContentView: View {
 
                 Button("Start Webcam") {
                     webcam.startStreaming(
-                        urlString: webcamURL,
+                        urlString: activeWebcamURL,
                         token: webcamToken,
                         resolution: webcamResolution,
                         fps: webcamFPS,
