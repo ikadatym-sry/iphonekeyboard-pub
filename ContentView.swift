@@ -110,6 +110,7 @@ enum KeyboardInputMode: String, CaseIterable, Identifiable {
 enum PhoneWorkspaceSection: String, CaseIterable, Identifiable {
     case controls
     case settings
+    case webcam
 
     var id: String { rawValue }
 
@@ -119,6 +120,8 @@ enum PhoneWorkspaceSection: String, CaseIterable, Identifiable {
             return "Controls"
         case .settings:
             return "Settings"
+        case .webcam:
+            return "Webcam"
         }
     }
 }
@@ -284,6 +287,7 @@ struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @StateObject private var bluetooth = BluetoothInputManager()
+    @StateObject private var webcam = WebcamStreamingManager()
     @AppStorage("remotePad.savedAppearanceMode") private var savedAppearanceModeRawValue = AppAppearanceMode.system.rawValue
     @AppStorage("remotePad.savedPreset") private var savedPresetRawValue = ControlPreset.balanced.rawValue
     @AppStorage("remotePad.savedPointerSensitivity") private var savedPointerSensitivity = ControlPreset.balanced.pointerSensitivity
@@ -294,6 +298,11 @@ struct ContentView: View {
     @AppStorage("remotePad.savedDeviceName") private var savedDeviceName = "iPhoneRemotePad"
     @AppStorage("remotePad.savedPhoneWorkspaceSection") private var savedPhoneWorkspaceSectionRawValue = PhoneWorkspaceSection.controls.rawValue
     @AppStorage("remotePad.requireSecureWebSocket") private var requireSecureWebSocket = false
+    @AppStorage("remotePad.savedWebcamURL") private var savedWebcamURL = "ws://192.168.1.100:8767"
+    @AppStorage("remotePad.savedWebcamToken") private var savedWebcamToken = "remotepad-token"
+    @AppStorage("remotePad.savedWebcamMicEnabled") private var savedWebcamMicEnabled = false
+    @AppStorage("remotePad.savedWebcamResolution") private var savedWebcamResolutionRawValue = WebcamResolutionPreset.p1080.rawValue
+    @AppStorage("remotePad.savedWebcamFPS") private var savedWebcamFPSRawValue = WebcamFPSPreset.fps30.rawValue
 
     @State private var textToSend = ""
     @State private var keyboardInputMode: KeyboardInputMode = .sendText
@@ -305,6 +314,11 @@ struct ContentView: View {
     @State private var webSocketToken = "remotepad-token"
     @State private var deviceName = "iPhoneRemotePad"
     @State private var phoneWorkspaceSection: PhoneWorkspaceSection = .controls
+    @State private var webcamURL = "ws://192.168.1.100:8767"
+    @State private var webcamToken = "remotepad-token"
+    @State private var webcamMicEnabled = false
+    @State private var webcamResolution: WebcamResolutionPreset = .p1080
+    @State private var webcamFPS: WebcamFPSPreset = .fps30
     @State private var activeModifierUsageIDs: Set<UInt16> = []
     @State private var loadedPersistedSettings = false
 
@@ -381,24 +395,15 @@ struct ContentView: View {
 
             ScrollView {
                 VStack(spacing: layout.stackSpacing) {
-                    if layout.isPhoneLayout {
-                        phoneWorkspacePicker
+                    phoneWorkspacePicker
 
-                        if phoneWorkspaceSection == .controls {
-                            compactBLECard(layout: layout)
-                            trackpadCard(height: layout.trackpadHeight, layout: layout)
-                            mouseButtonRow(layout: layout)
-                            scrollButtonRow(layout: layout)
-                            keyboardCard(layout: layout)
-                        } else {
-                            topSection(layout: layout)
-                        }
-                    } else {
+                    switch phoneWorkspaceSection {
+                    case .controls:
+                        controlsWorkspace(layout: layout)
+                    case .settings:
                         topSection(layout: layout)
-                        trackpadCard(height: layout.trackpadHeight, layout: layout)
-                        mouseButtonRow(layout: layout)
-                        scrollButtonRow(layout: layout)
-                        keyboardCard(layout: layout)
+                    case .webcam:
+                        webcamCard(layout: layout)
                     }
                 }
                 .padding(.horizontal, layout.horizontalPadding)
@@ -437,6 +442,18 @@ struct ContentView: View {
                     phoneWorkspaceSection = savedPhoneWorkspaceSection
                 }
 
+                webcamURL = savedWebcamURL
+                webcamToken = savedWebcamToken
+                webcamMicEnabled = savedWebcamMicEnabled
+
+                if let savedWebcamResolution = WebcamResolutionPreset(rawValue: savedWebcamResolutionRawValue) {
+                    webcamResolution = savedWebcamResolution
+                }
+
+                if let savedWebcamFPS = WebcamFPSPreset(rawValue: savedWebcamFPSRawValue) {
+                    webcamFPS = savedWebcamFPS
+                }
+
                 loadedPersistedSettings = true
             }
             .onChange(of: selectedPreset) { newPreset in
@@ -467,6 +484,21 @@ struct ContentView: View {
             .onChange(of: phoneWorkspaceSection) { newValue in
                 savedPhoneWorkspaceSectionRawValue = newValue.rawValue
             }
+            .onChange(of: webcamURL) { newValue in
+                savedWebcamURL = newValue
+            }
+            .onChange(of: webcamToken) { newValue in
+                savedWebcamToken = newValue
+            }
+            .onChange(of: webcamMicEnabled) { newValue in
+                savedWebcamMicEnabled = newValue
+            }
+            .onChange(of: webcamResolution) { newValue in
+                savedWebcamResolutionRawValue = newValue.rawValue
+            }
+            .onChange(of: webcamFPS) { newValue in
+                savedWebcamFPSRawValue = newValue.rawValue
+            }
             .onChange(of: deviceName) { newValue in
                 bluetooth.setAdvertisingName(newValue)
                 if deviceName != bluetooth.advertisingName {
@@ -476,6 +508,7 @@ struct ContentView: View {
             }
             .onDisappear {
                 releaseAllModifiers()
+                webcam.stopStreaming()
             }
         }
     }
@@ -550,6 +583,23 @@ struct ContentView: View {
                     wifiCard(layout: layout)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func controlsWorkspace(layout: LayoutMetrics) -> some View {
+        if layout.isPhoneLayout {
+            compactBLECard(layout: layout)
+            trackpadCard(height: layout.trackpadHeight, layout: layout)
+            mouseButtonRow(layout: layout)
+            scrollButtonRow(layout: layout)
+            keyboardCard(layout: layout)
+        } else {
+            topSection(layout: layout)
+            trackpadCard(height: layout.trackpadHeight, layout: layout)
+            mouseButtonRow(layout: layout)
+            scrollButtonRow(layout: layout)
+            keyboardCard(layout: layout)
         }
     }
 
@@ -730,6 +780,113 @@ struct ContentView: View {
 
                 Button("Disconnect") {
                     bluetooth.disconnectWebSocket()
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(layout.cardPadding)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func webcamCard(layout: LayoutMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Webcam")
+                .font(.headline)
+
+            Text(webcam.status)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+
+            WebcamPreviewView(session: webcam.captureSession)
+                .frame(height: layout.isPhoneLayout ? 220 : 320)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                )
+
+            TextField("ws://<windows-ip>:8767", text: $webcamURL)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+
+            TextField("Token", text: $webcamToken)
+                .textFieldStyle(.roundedBorder)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+
+            if layout.isPhoneLayout {
+                Picker("Resolution", selection: $webcamResolution) {
+                    ForEach(WebcamResolutionPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Picker("Frame Rate", selection: $webcamFPS) {
+                    ForEach(WebcamFPSPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else {
+                Picker("Resolution", selection: $webcamResolution) {
+                    ForEach(WebcamResolutionPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Frame Rate", selection: $webcamFPS) {
+                    ForEach(WebcamFPSPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Toggle("Enable microphone audio", isOn: $webcamMicEnabled)
+                .toggleStyle(.switch)
+
+            Text("Default is OFF. Use LAN or USB tethering network for lowest latency.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Text(String(format: "Send FPS: %.1f", webcam.transmittedFPS))
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: layout.isPhoneLayout ? 104 : 120), spacing: 10)], spacing: 10) {
+                Button("Use Discovered Host") {
+                    bluetooth.discoverWebSocketServer { discoveredURL in
+                        guard let discoveredURL,
+                              var components = URLComponents(string: discoveredURL),
+                              components.host != nil else {
+                            return
+                        }
+
+                        components.port = 8767
+                        if let wsURL = components.string {
+                            webcamURL = wsURL
+                        }
+                    }
+                }
+                .buttonStyle(.bordered)
+
+                Button("Start Webcam") {
+                    webcam.startStreaming(
+                        urlString: webcamURL,
+                        token: webcamToken,
+                        resolution: webcamResolution,
+                        fps: webcamFPS,
+                        micEnabled: webcamMicEnabled
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+
+                Button("Stop Webcam") {
+                    webcam.stopStreaming()
                 }
                 .buttonStyle(.bordered)
             }
