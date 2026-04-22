@@ -24,9 +24,11 @@ This project now includes a dedicated Webcam tab on iOS.
 	- `ws://192.168.1.100:8767`
    - USB mode commonly uses `ws://172.20.10.2:8767`
 4. Set token to match Windows receiver token.
-5. Choose resolution and FPS.
-6. `Enable microphone audio` default is OFF.
-7. Tap `Start Webcam`.
+5. Choose camera: `Front` or `Back`.
+6. Choose resolution and FPS.
+7. If camera setup fails, try `Back` camera or `720p`.
+8. `Enable microphone audio` default is OFF.
+9. Tap `Start Webcam`.
 
 ### Screen Awake
 - In Settings workspace, enable `Keep screen awake` to prevent iPhone display sleep while using controls/webcam.

@@ -319,6 +319,7 @@ struct ContentView: View {
     @AppStorage("remotePad.savedWebcamMicEnabled") private var savedWebcamMicEnabled = false
     @AppStorage("remotePad.savedWebcamResolution") private var savedWebcamResolutionRawValue = WebcamResolutionPreset.p1080.rawValue
     @AppStorage("remotePad.savedWebcamFPS") private var savedWebcamFPSRawValue = WebcamFPSPreset.fps30.rawValue
+    @AppStorage("remotePad.savedWebcamCameraPosition") private var savedWebcamCameraPositionRawValue = WebcamCameraPosition.front.rawValue
     @AppStorage("remotePad.savedTransportMode") private var savedTransportModeRawValue = NetworkTransportMode.wifi.rawValue
     @AppStorage("remotePad.savedWiFiWebSocketURL") private var savedWiFiWebSocketURL = "ws://192.168.1.100:8765"
     @AppStorage("remotePad.savedUSBWebSocketURL") private var savedUSBWebSocketURL = "ws://172.20.10.2:8765"
@@ -344,6 +345,7 @@ struct ContentView: View {
     @State private var webcamMicEnabled = false
     @State private var webcamResolution: WebcamResolutionPreset = .p1080
     @State private var webcamFPS: WebcamFPSPreset = .fps30
+    @State private var webcamCameraPosition: WebcamCameraPosition = .front
     @State private var activeModifierUsageIDs: Set<UInt16> = []
     @State private var loadedPersistedSettings = false
 
@@ -496,6 +498,10 @@ struct ContentView: View {
                     webcamFPS = savedWebcamFPS
                 }
 
+                if let savedWebcamCameraPosition = WebcamCameraPosition(rawValue: savedWebcamCameraPositionRawValue) {
+                    webcamCameraPosition = savedWebcamCameraPosition
+                }
+
                 updateIdleTimerSetting()
 
                 loadedPersistedSettings = true
@@ -551,6 +557,12 @@ struct ContentView: View {
             }
             .onChange(of: webcamFPS) { newValue in
                 savedWebcamFPSRawValue = newValue.rawValue
+            }
+            .onChange(of: webcamCameraPosition) { newValue in
+                savedWebcamCameraPositionRawValue = newValue.rawValue
+                if webcam.isStreaming {
+                    webcam.switchCamera(to: newValue)
+                }
             }
             .onChange(of: keepScreenAwake) { _ in
                 updateIdleTimerSetting()
@@ -967,6 +979,13 @@ struct ContentView: View {
                 .autocorrectionDisabled(true)
 
             if layout.isPhoneLayout {
+                Picker("Camera", selection: $webcamCameraPosition) {
+                    ForEach(WebcamCameraPosition.allCases) { position in
+                        Text(position.title).tag(position)
+                    }
+                }
+                .pickerStyle(.menu)
+
                 Picker("Resolution", selection: $webcamResolution) {
                     ForEach(WebcamResolutionPreset.allCases) { preset in
                         Text(preset.title).tag(preset)
@@ -981,6 +1000,13 @@ struct ContentView: View {
                 }
                 .pickerStyle(.menu)
             } else {
+                Picker("Camera", selection: $webcamCameraPosition) {
+                    ForEach(WebcamCameraPosition.allCases) { position in
+                        Text(position.title).tag(position)
+                    }
+                }
+                .pickerStyle(.segmented)
+
                 Picker("Resolution", selection: $webcamResolution) {
                     ForEach(WebcamResolutionPreset.allCases) { preset in
                         Text(preset.title).tag(preset)
@@ -1030,6 +1056,7 @@ struct ContentView: View {
                         token: webcamToken,
                         resolution: webcamResolution,
                         fps: webcamFPS,
+                        cameraPosition: webcamCameraPosition,
                         micEnabled: webcamMicEnabled
                     )
                 }

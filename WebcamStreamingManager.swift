@@ -40,11 +40,41 @@ enum WebcamFPSPreset: String, CaseIterable, Identifiable {
     }
 }
 
+enum WebcamCameraPosition: String, CaseIterable, Identifiable {
+    case front
+    case back
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .front:
+            return "Front"
+        case .back:
+            return "Back"
+        }
+    }
+
+    var capturePosition: AVCaptureDevice.Position {
+        switch self {
+        case .front:
+            return .front
+        case .back:
+            return .back
+        }
+    }
+
+    init(devicePosition: AVCaptureDevice.Position) {
+        self = devicePosition == .back ? .back : .front
+    }
+}
+
 final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSocketDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
     @Published private(set) var status = "Webcam idle"
     @Published private(set) var isStreaming = false
     @Published private(set) var isConnected = false
     @Published private(set) var transmittedFPS: Double = 0
+    @Published private(set) var activeCameraPosition: WebcamCameraPosition = .front
 
     let captureSession = AVCaptureSession()
 
@@ -57,9 +87,11 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
     private var webSocketTask: URLSessionWebSocketTask?
     private var authToken: String = ""
     private var videoOutput: AVCaptureVideoDataOutput?
+    private var videoInput: AVCaptureDeviceInput?
 
     private var selectedFPS: WebcamFPSPreset = .fps30
     private var selectedResolution: WebcamResolutionPreset = .p1080
+    private var selectedCameraPosition: WebcamCameraPosition = .front
     private var micEnabled = false
 
     private var isWebSocketAuthenticated = false
@@ -78,6 +110,7 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
         token: String,
         resolution: WebcamResolutionPreset,
         fps: WebcamFPSPreset,
+        cameraPosition: WebcamCameraPosition,
         micEnabled: Bool
     ) {
         let trimmedURL = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -110,8 +143,32 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
                 token: trimmedToken,
                 resolution: resolution,
                 fps: fps,
+                cameraPosition: cameraPosition,
                 micEnabled: micEnabled
             )
+        }
+    }
+
+    func switchCamera(to position: WebcamCameraPosition) {
+        captureQueue.async { [weak self] in
+            guard let self else {
+                return
+            }
+
+            self.selectedCameraPosition = position
+
+            guard self.videoInput != nil else {
+                DispatchQueue.main.async {
+                    self.activeCameraPosition = position
+                }
+                return
+            }
+
+            do {
+                try self.reconfigureVideoInput(cameraPosition: position)
+            } catch {
+                self.updateStatus("Camera switch failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -127,6 +184,9 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
             if self.captureSession.isRunning {
                 self.captureSession.stopRunning()
             }
+
+            self.videoInput = nil
+            self.videoOutput = nil
         }
 
         webSocketTask?.cancel(with: .goingAway, reason: nil)
@@ -248,6 +308,7 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
         token: String,
         resolution: WebcamResolutionPreset,
         fps: WebcamFPSPreset,
+        cameraPosition: WebcamCameraPosition,
         micEnabled: Bool
     ) {
         stopStreaming()
@@ -255,16 +316,32 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
         authToken = token
         selectedResolution = resolution
         selectedFPS = fps
+        selectedCameraPosition = cameraPosition
+        DispatchQueue.main.async {
+            self.activeCameraPosition = cameraPosition
+        }
         self.micEnabled = micEnabled
         frameIntervalSeconds = 1.0 / Double(max(fps.value, 15))
         lastFrameSentAt = 0
         fpsWindowStartAt = CACurrentMediaTime()
         fpsWindowCount = 0
 
-        do {
-            try configureCaptureSession(resolution: resolution, fps: fps, includeMic: micEnabled)
-        } catch {
-            updateStatus("Webcam setup failed: \(error.localizedDescription)")
+        var setupError: Error?
+        captureQueue.sync {
+            do {
+                try self.configureCaptureSession(
+                    resolution: resolution,
+                    fps: fps,
+                    cameraPosition: cameraPosition,
+                    includeMic: micEnabled
+                )
+            } catch {
+                setupError = error
+            }
+        }
+
+        if let setupError {
+            updateStatus("Webcam setup failed: \(setupError.localizedDescription)")
             return
         }
 
@@ -369,10 +446,11 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
     private func configureCaptureSession(
         resolution: WebcamResolutionPreset,
         fps: WebcamFPSPreset,
+        cameraPosition: WebcamCameraPosition,
         includeMic: Bool
     ) throws {
         captureSession.beginConfiguration()
-        captureSession.sessionPreset = resolution.sessionPreset
+        captureSession.sessionPreset = .high
 
         for input in captureSession.inputs {
             captureSession.removeInput(input)
@@ -382,8 +460,7 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
             captureSession.removeOutput(output)
         }
 
-        guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
-            ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+        guard let videoDevice = resolveVideoDevice(preferred: cameraPosition) else {
             captureSession.commitConfiguration()
             throw WebcamError.cameraUnavailable
         }
@@ -394,6 +471,12 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
             throw WebcamError.cannotAddVideoInput
         }
         captureSession.addInput(videoInput)
+        self.videoInput = videoInput
+        let actualCameraPosition = WebcamCameraPosition(devicePosition: videoDevice.position)
+        selectedCameraPosition = actualCameraPosition
+        DispatchQueue.main.async {
+            self.activeCameraPosition = actualCameraPosition
+        }
 
         if includeMic,
            let audioDevice = AVCaptureDevice.default(for: .audio),
@@ -415,18 +498,97 @@ final class WebcamStreamingManager: NSObject, ObservableObject, URLSessionWebSoc
         captureSession.addOutput(output)
         videoOutput = output
 
-        if let connection = output.connection(with: .video) {
-            if connection.isVideoMirroringSupported {
-                connection.isVideoMirrored = true
-            }
-            if connection.isVideoOrientationSupported {
-                connection.videoOrientation = .portrait
-            }
-        }
+        applyCaptureResolutionPreset(resolution)
+        applyVideoConnectionSettings(output: output, cameraPosition: actualCameraPosition)
 
         try configureFrameRate(device: videoDevice, fps: fps)
 
         captureSession.commitConfiguration()
+    }
+
+    private func reconfigureVideoInput(cameraPosition: WebcamCameraPosition) throws {
+        guard let videoDevice = resolveVideoDevice(preferred: cameraPosition) else {
+            throw WebcamError.cameraUnavailable
+        }
+
+        let newInput = try AVCaptureDeviceInput(device: videoDevice)
+        let previousInput = videoInput
+
+        captureSession.beginConfiguration()
+        if let previousInput {
+            captureSession.removeInput(previousInput)
+        }
+
+        guard captureSession.canAddInput(newInput) else {
+            if let previousInput, captureSession.canAddInput(previousInput) {
+                captureSession.addInput(previousInput)
+                videoInput = previousInput
+            }
+            captureSession.commitConfiguration()
+            throw WebcamError.cannotAddVideoInput
+        }
+
+        captureSession.addInput(newInput)
+        videoInput = newInput
+
+        let actualCameraPosition = WebcamCameraPosition(devicePosition: videoDevice.position)
+        selectedCameraPosition = actualCameraPosition
+
+        if let output = videoOutput {
+            applyVideoConnectionSettings(output: output, cameraPosition: actualCameraPosition)
+        }
+
+        applyCaptureResolutionPreset(selectedResolution)
+        try configureFrameRate(device: videoDevice, fps: selectedFPS)
+        captureSession.commitConfiguration()
+
+        DispatchQueue.main.async {
+            self.activeCameraPosition = actualCameraPosition
+        }
+    }
+
+    private func resolveVideoDevice(preferred cameraPosition: WebcamCameraPosition) -> AVCaptureDevice? {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: cameraPosition.capturePosition)
+            ?? AVCaptureDevice.default(
+                .builtInWideAngleCamera,
+                for: .video,
+                position: cameraPosition == .front ? .back : .front
+            )
+    }
+
+    private func applyVideoConnectionSettings(output: AVCaptureVideoDataOutput, cameraPosition: WebcamCameraPosition) {
+        guard let connection = output.connection(with: .video) else {
+            return
+        }
+
+        if connection.isVideoMirroringSupported {
+            connection.isVideoMirrored = cameraPosition == .front
+        }
+
+        if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
+        }
+    }
+
+    private func applyCaptureResolutionPreset(_ resolution: WebcamResolutionPreset) {
+        if captureSession.canSetSessionPreset(resolution.sessionPreset) {
+            captureSession.sessionPreset = resolution.sessionPreset
+            selectedResolution = resolution
+            return
+        }
+
+        if captureSession.canSetSessionPreset(.hd1280x720) {
+            captureSession.sessionPreset = .hd1280x720
+            selectedResolution = .p720
+            if resolution != .p720 {
+                updateStatus("1080p not supported on this camera. Falling back to 720p.")
+            }
+            return
+        }
+
+        if captureSession.canSetSessionPreset(.high) {
+            captureSession.sessionPreset = .high
+        }
     }
 
     private func configureFrameRate(device: AVCaptureDevice, fps: WebcamFPSPreset) throws {
