@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreMotion
+import Foundation
 
 class SensorManager: ObservableObject {
     private let altimeter = CMAltimeter()
@@ -7,9 +8,12 @@ class SensorManager: ObservableObject {
 
     @Published var altitude: Double = 0.0
     @Published var pressure: Double = 0.0
+    @Published var estimatedAltitude: Double = 0.0
     @Published var isSupported: Bool = false
     @Published var accelerometerData: CMAcceleration = CMAcceleration(x: 0, y: 0, z: 0)
     @Published var gyroData: CMRotationRate = CMRotationRate(x: 0, y: 0, z: 0)
+    
+    var referenceSeaLevelPressure: Double = 1013.25
 
     init() {
         checkSupport()
@@ -22,9 +26,14 @@ class SensorManager: ObservableObject {
     func startUpdates() {
         if CMAltimeter.isRelativeAltitudeAvailable() {
             altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, error in
-                guard let data = data, error == nil else { return }
-                self?.altitude = data.relativeAltitude.doubleValue
-                self?.pressure = data.pressure.doubleValue * 10 // Convert kPa to hPa (mbar)
+                guard let data = data, error == nil, let self = self else { return }
+                self.altitude = data.relativeAltitude.doubleValue
+                
+                let currentPressure = data.pressure.doubleValue * 10.0 // Convert kPa to hPa (mbar)
+                self.pressure = currentPressure
+                
+                // Calculate estimated absolute altitude using the barometric formula
+                self.estimatedAltitude = 44330.0 * (1.0 - pow(currentPressure / self.referenceSeaLevelPressure, 1.0 / 5.255))
             }
         }
 
@@ -54,6 +63,7 @@ class SensorManager: ObservableObject {
 
 struct SensorTestView: View {
     @StateObject private var sensorManager = SensorManager()
+    @AppStorage("seaLevelPressure") private var seaLevelPressure: Double = 1013.25
 
     var body: some View {
         NavigationView {
@@ -61,14 +71,33 @@ struct SensorTestView: View {
                 Section(header: Text("Barometer / Altimeter")) {
                     if sensorManager.isSupported {
                         HStack {
-                            Text("Relative Altitude")
+                            Text("QNH (Sea Level Pressure)")
                             Spacer()
-                            Text(String(format: "%.2f m", sensorManager.altitude))
+                            TextField("1013.25", value: $seaLevelPressure, format: .number)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 100)
+                            Text("hPa")
                         }
+                        
                         HStack {
-                            Text("Pressure")
+                            Text("Raw Pressure")
                             Spacer()
                             Text(String(format: "%.2f hPa", sensorManager.pressure))
+                        }
+                        
+                        HStack {
+                            Text("Est. Absolute Altitude")
+                            Spacer()
+                            Text(String(format: "%.2f m", sensorManager.estimatedAltitude))
+                                .bold()
+                                .foregroundColor(.blue)
+                        }
+
+                        HStack {
+                            Text("Relative Altitude (from start)")
+                            Spacer()
+                            Text(String(format: "%.2f m", sensorManager.altitude))
                         }
                     } else {
                         Text("Barometer not supported on this device.")
@@ -114,10 +143,14 @@ struct SensorTestView: View {
             }
             .navigationTitle("Sensor Data")
             .onAppear {
+                sensorManager.referenceSeaLevelPressure = seaLevelPressure
                 sensorManager.startUpdates()
             }
             .onDisappear {
                 sensorManager.stopUpdates()
+            }
+            .onChange(of: seaLevelPressure) { newValue in
+                sensorManager.referenceSeaLevelPressure = newValue
             }
         }
     }

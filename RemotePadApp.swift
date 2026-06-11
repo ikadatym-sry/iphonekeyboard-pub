@@ -14,6 +14,11 @@ struct BLERemotePadApp: App {
                     .tabItem {
                         Label("Sensors", systemImage: "sensor.tag.radiowaves.forward")
                     }
+                    
+                WebcamView()
+                    .tabItem {
+                        Label("Camera", systemImage: "camera")
+                    }
             }
         }
     }

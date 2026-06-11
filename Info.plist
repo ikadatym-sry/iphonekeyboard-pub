@@ -31,8 +31,10 @@
         <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
-        <key>NSMotionUsageDescription</key>
+    <key>NSMotionUsageDescription</key>
     <string>We need access to the barometer and motion sensors to show real-time altitude and motion data.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>We need access to the camera to stream video to the PC receiver.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>bluetooth-peripheral</string>
