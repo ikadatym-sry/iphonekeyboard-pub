@@ -35,7 +35,7 @@ targets:
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
   WatchApp:
-    type: watchos.app
+    type: application
     platform: watchOS
     deploymentTarget: "10.0"
     sources:
