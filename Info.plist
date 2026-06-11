@@ -31,6 +31,8 @@
         <key>NSAllowsLocalNetworking</key>
         <true/>
     </dict>
+        <key>NSMotionUsageDescription</key>
+    <string>We need access to the barometer and motion sensors to show real-time altitude and motion data.</string>
     <key>UIBackgroundModes</key>
     <array>
         <string>bluetooth-peripheral</string>
@@ -43,3 +45,4 @@
     </array>
 </dict>
 </plist>
+

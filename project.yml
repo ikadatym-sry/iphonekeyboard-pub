@@ -18,9 +18,11 @@ targets:
     deploymentTarget: "15.5"
     sources:
       - path: .
-        includes:
-          - "*.swift"
-      - path: Assets.xcassets
+        excludes:
+          - "WatchApp"
+    dependencies:
+      - target: WatchApp
+        embed: true
     settings:
       base:
         INFOPLIST_FILE: Info.plist
@@ -32,12 +34,27 @@ targets:
         CODE_SIGNING_ALLOWED: NO
         CODE_SIGNING_REQUIRED: NO
         CODE_SIGN_IDENTITY: ""
+  WatchApp:
+    type: watchos.app
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: WatchApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aerkkungcnx.BLERemotePad.watchkitapp
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSMotionUsageDescription: "We need access to the barometer and motion sensors to show real-time altitude and motion data."
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
 
 schemes:
   BLERemotePad:
     build:
       targets:
         BLERemotePad: all
+        WatchApp: all
     run:
       config: Debug
     archive:

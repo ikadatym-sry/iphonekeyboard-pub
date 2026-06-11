@@ -4,7 +4,17 @@ import SwiftUI
 struct BLERemotePadApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            TabView {
+                ContentView()
+                    .tabItem {
+                        Label("Keyboard", systemImage: "keyboard")
+                    }
+                
+                SensorTestView()
+                    .tabItem {
+                        Label("Sensors", systemImage: "sensor.tag.radiowaves.forward")
+                    }
+            }
         }
     }
 }
